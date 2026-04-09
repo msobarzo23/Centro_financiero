@@ -3,63 +3,108 @@ import Papa from 'papaparse';
 const BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub';
 
 const SHEETS = {
-  resumen:  `${BASE}?gid=1738797304&single=true&output=csv`,
-  bancos:   `${BASE}?gid=1699395114&single=true&output=csv`,
-  dap:      `${BASE}?gid=1020614134&single=true&output=csv`,
+  bancos:     `${BASE}?gid=1699395114&single=true&output=csv`,
+  dap:        `${BASE}?gid=1020614134&single=true&output=csv`,
   calendario: `${BASE}?gid=1876759165&single=true&output=csv`,
-  ffmm:     `${BASE}?gid=1691837276&single=true&output=csv`,
+  ffmm:       `${BASE}?gid=1691837276&single=true&output=csv`,
 };
 
+// Skip title rows (first 3 rows are title/description/blank)
+function skipTitleRows(text) {
+  const lines = text.split('\n');
+  // Find the header row - it's the one that has actual column names
+  // Usually row index 3 (4th row, after title, description, blank)
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('Fecha') || line.startsWith('Empresa')) {
+      headerIdx = i;
+      break;
+    }
+  }
+  return lines.slice(headerIdx).join('\n');
+}
+
 function parseCSV(text) {
-  const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
-  return result.data;
+  const cleaned = skipTitleRows(text);
+  return Papa.parse(cleaned, { header: true, skipEmptyLines: true }).data;
 }
 
+// Parse Chilean number format: 684.491.358 or $684.491.358 or (123.456)
 function parseNum(v) {
-  if (v == null || v === '' || v === '-') return null;
-  const s = String(v).replace(/\$/g, '').replace(/\./g, '').replace(/,/g, '.').replace(/\s/g, '').replace(/[()]/g, '');
+  if (v == null || v === '' || v === '-' || v === '—') return null;
+  let s = String(v).trim();
+  // Remove $ and spaces
+  s = s.replace(/\$/g, '').replace(/\s/g, '');
+  // Check for parentheses (negative)
+  const isNeg = s.startsWith('(') && s.endsWith(')');
+  if (isNeg) s = s.slice(1, -1);
+  // Chilean format: dots are thousands, comma is decimal
+  // If has dots and no comma: 684.491.358 → remove dots
+  // If has dots and comma: 1.234,56 → remove dots, replace comma with dot
+  if (s.includes('.') && s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes('.')) {
+    // Could be 684.491.358 (thousands) or 0.39 (decimal)
+    // If multiple dots, definitely thousands separator
+    const dotCount = (s.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      s = s.replace(/\./g, '');
+    } else {
+      // Single dot: check if it looks like thousands (3 digits after dot)
+      const parts = s.split('.');
+      if (parts[1] && parts[1].length === 3) {
+        s = s.replace('.', ''); // thousands
+      }
+      // else keep as decimal
+    }
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
   const n = parseFloat(s);
-  return isNaN(n) ? null : (String(v).includes('(') ? -n : n);
+  return isNaN(n) ? null : (isNeg ? -n : n);
 }
 
+// Parse tasa: "0,560%" or "0.39%" or 0.0039
 function parsePct(v) {
-  if (v == null || v === '') return null;
-  const s = String(v).replace('%', '').replace(',', '.').trim();
+  if (v == null || v === '' || v === '-') return null;
+  let s = String(v).trim().replace('%', '').replace(',', '.').replace(/"/g, '');
   const n = parseFloat(s);
   if (isNaN(n)) return null;
-  return n > 1 ? n / 100 : n;
+  // If value > 0.1, it's likely a percentage like 0.390% meaning 0.00390
+  if (n > 0.1) return n / 100;
+  return n;
 }
 
+// Parse date DD/MM/YYYY or YYYY-MM-DD
 function parseDate(v) {
   if (!v) return null;
   const s = String(v).trim();
   // DD/MM/YYYY
   const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+  if (m1) {
+    const day = m1[1].padStart(2, '0');
+    const month = m1[2].padStart(2, '0');
+    return `${m1[3]}-${month}-${day}`;
+  }
   // YYYY-MM-DD
   const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
-  // MM/DD/YYYY (Google Sheets US locale)
-  const m3 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m3) {
-    const d = parseInt(m3[1]), mo = parseInt(m3[2]);
-    if (d > 12) return `${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;
-    return `${m3[3]}-${m3[1].padStart(2,'0')}-${m3[2].padStart(2,'0')}`;
-  }
   return null;
 }
 
 export async function fetchAllData() {
-  const [resText, bancosText, dapText, calText, ffmmText] = await Promise.all(
-    [SHEETS.resumen, SHEETS.bancos, SHEETS.dap, SHEETS.calendario, SHEETS.ffmm].map(url =>
+  const results = await Promise.all(
+    Object.values(SHEETS).map(url =>
       fetch(url, { cache: 'no-store' }).then(r => r.text()).catch(() => '')
     )
   );
+  const [bancosText, dapText, calText, ffmmText] = results;
 
-  // Parse Bancos - skip title rows, find header
+  // Parse Bancos
   const bancosRaw = parseCSV(bancosText);
   const bancos = bancosRaw
-    .filter(r => r['Fecha'] && r['Banco'] && parseDate(r['Fecha']))
+    .filter(r => r['Fecha'] && parseDate(r['Fecha']))
     .map(r => ({
       fecha: parseDate(r['Fecha']),
       banco: (r['Banco'] || '').trim(),
@@ -67,33 +112,45 @@ export async function fetchAllData() {
       monto: parseNum(r['Monto']),
       saldoInicial: parseNum(r['Saldo Inicial']),
       saldoFinal: parseNum(r['Saldo Final']),
-      comentario: (r['Comentario'] || r['COMENTARIO O QUE HACER'] || '').trim(),
+      comentario: (r['Comentario'] || '').trim(),
       estado: (r['Estado'] || '').trim(),
     }));
 
   // Parse DAP
   const dapRaw = parseCSV(dapText);
   const dap = dapRaw
-    .filter(r => r['Fecha Inicio'] && parseDate(r['Fecha Inicio']) && r['Fecha Inicio'] !== 'Total')
-    .map(r => ({
-      fechaInicio: parseDate(r['Fecha Inicio']),
-      vencimiento: parseDate(r['Vencimiento']),
-      dias: parseNum(r['Días']) || parseNum(r['Dias']) || 0,
-      tasa: parsePct(r['Tasa']) || parseNum(r['Tasa']) || 0,
-      montoInicial: parseNum(r['Monto Inicial']) || 0,
-      montoFinal: parseNum(r['Monto Final']) || 0,
-      ganancia: parseNum(r['Ganancia']) || 0,
-      tipo: (r['Tipo'] || r['Tipo inversion/ trabajo'] || '').trim(),
-      vigente: (r['Vigente'] || '').trim().toLowerCase(),
-      banco: (r['Banco'] || '').trim(),
-      estado: (r['Estado'] || r['estado'] || '').trim(),
-      comentario: (r['Comentario'] || '').trim(),
-    }));
+    .filter(r => {
+      const fi = r['Fecha Inicio'] || '';
+      return fi && fi !== 'Total' && fi !== 'TOTALES' && parseDate(fi);
+    })
+    .map(r => {
+      const tasa = parsePct(r['Tasa']) || 0;
+      const montoIni = parseNum(r['Monto Inicial']) || 0;
+      const montoFin = parseNum(r['Monto Final']) || 0;
+      const ganancia = parseNum(r['Ganancia']) || 0;
+      return {
+        fechaInicio: parseDate(r['Fecha Inicio']),
+        vencimiento: parseDate(r['Vencimiento']),
+        dias: parseNum(r['Días']) || parseNum(r['Dias']) || 0,
+        tasa,
+        montoInicial: montoIni,
+        montoFinal: montoFin,
+        ganancia: ganancia,
+        tipo: (r['Tipo'] || '').trim(),
+        vigente: (r['Vigente'] || '').trim().toLowerCase(),
+        banco: (r['Banco'] || '').trim(),
+        estado: (r['Estado'] || r['estado'] || '').trim(),
+        comentario: (r['Comentario'] || '').trim(),
+      };
+    });
 
   // Parse Calendario
   const calRaw = parseCSV(calText);
   const calendario = calRaw
-    .filter(r => r['Fecha'] && parseDate(r['Fecha']) && r['Fecha'] !== 'TOTALES')
+    .filter(r => {
+      const f = r['Fecha'] || '';
+      return f && f !== 'TOTALES' && f !== 'Total' && parseDate(f);
+    })
     .map(r => ({
       fecha: parseDate(r['Fecha']),
       monto: parseNum(r['Monto']) || 0,
@@ -104,62 +161,50 @@ export async function fetchAllData() {
       comentario: (r['Comentario'] || '').trim(),
     }));
 
-  // Parse FFMM - has two sections: Saldos (row 5+) and Movimientos (row 14+)
-  const ffmmRaw = parseCSV(ffmmText);
+  // Parse FFMM - two sections in one sheet
+  const ffmmLines = ffmmText.split('\n');
   const ffmmSaldos = [];
   const ffmmMovimientos = [];
-  
-  let inSaldos = false, inMov = false;
-  const allRows = Papa.parse(ffmmText, { skipEmptyLines: true }).data;
-  
-  let saldoHeaders = null, movHeaders = null;
-  for (let i = 0; i < allRows.length; i++) {
-    const row = allRows[i];
-    const first = (row[0] || '').trim();
-    
-    if (first === 'Empresa' && row[1] && (row[1].trim() === 'Fondo' || row[1].trim() === 'Fecha')) {
-      if (!saldoHeaders && row[2] && row[2].trim() === 'Administradora') {
-        saldoHeaders = row.map(c => (c||'').trim());
-        inSaldos = true; inMov = false;
-        continue;
-      }
-      if (!movHeaders && row[2] && row[2].trim() === 'Fondo') {
-        movHeaders = row.map(c => (c||'').trim());
-        inSaldos = false; inMov = true;
-        continue;
-      }
-    }
-    if (first === 'Fecha' && row[1] && row[1].trim() === 'Empresa') {
-      movHeaders = row.map(c => (c||'').trim());
-      inSaldos = false; inMov = true;
-      continue;
-    }
-    if (first === 'HISTORIAL DE MOVIMIENTOS') { inSaldos = false; continue; }
-    if (first === '' && row.every(c => !c || c.trim() === '')) continue;
-    if (first === 'TOTAL' || first === 'TOTALES') { inSaldos = false; continue; }
-    
-    if (inSaldos && saldoHeaders && first && first !== 'SALDOS VIGENTES') {
+
+  let saldoHeaderIdx = -1, movHeaderIdx = -1;
+  for (let i = 0; i < ffmmLines.length; i++) {
+    const line = ffmmLines[i];
+    if (line.includes('Empresa') && line.includes('Administradora')) saldoHeaderIdx = i;
+    if (line.includes('Fecha') && line.includes('Empresa') && line.includes('Tipo')) movHeaderIdx = i;
+  }
+
+  if (saldoHeaderIdx >= 0) {
+    const saldoEnd = movHeaderIdx > 0 ? movHeaderIdx : ffmmLines.length;
+    const saldoCSV = ffmmLines.slice(saldoHeaderIdx, saldoEnd).join('\n');
+    const saldoData = Papa.parse(saldoCSV, { header: true, skipEmptyLines: true }).data;
+    for (const r of saldoData) {
+      const empresa = (r['Empresa'] || '').trim();
+      if (!empresa || empresa === 'TOTAL' || empresa === 'TOTALES' || empresa === 'SALDOS VIGENTES' || empresa === 'HISTORIAL DE MOVIMIENTOS') continue;
       ffmmSaldos.push({
-        empresa: (row[0]||'').trim(),
-        fondo: (row[1]||'').trim(),
-        admin: (row[2]||'').trim(),
-        invertido: parseNum(row[3]) || 0,
-        valorActual: parseNum(row[4]) || 0,
-        rentabilidad: parseNum(row[5]) || 0,
+        empresa,
+        fondo: (r['Fondo'] || '').trim(),
+        admin: (r['Administradora'] || '').trim(),
+        invertido: parseNum(r['Monto Invertido']) || 0,
+        valorActual: parseNum(r['Valor Actual']) || 0,
+        rentabilidad: parseNum(r['Rentabilidad']) || 0,
       });
     }
-    if (inMov && movHeaders && row[0]) {
-      const fecha = parseDate(row[0]);
-      if (fecha) {
-        ffmmMovimientos.push({
-          fecha,
-          empresa: (row[1]||'').trim(),
-          fondo: (row[2]||'').trim(),
-          tipo: (row[3]||'').trim(),
-          monto: parseNum(row[4]) || 0,
-          comentario: (row[5]||'').trim(),
-        });
-      }
+  }
+
+  if (movHeaderIdx >= 0) {
+    const movCSV = ffmmLines.slice(movHeaderIdx).join('\n');
+    const movData = Papa.parse(movCSV, { header: true, skipEmptyLines: true }).data;
+    for (const r of movData) {
+      const fecha = parseDate(r['Fecha']);
+      if (!fecha) continue;
+      ffmmMovimientos.push({
+        fecha,
+        empresa: (r['Empresa'] || '').trim(),
+        fondo: (r['Fondo'] || '').trim(),
+        tipo: (r['Tipo'] || '').trim(),
+        monto: parseNum(r['Monto']) || 0,
+        comentario: (r['Comentario'] || '').trim(),
+      });
     }
   }
 
@@ -168,5 +213,5 @@ export async function fetchAllData() {
 
 export function getToday() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
