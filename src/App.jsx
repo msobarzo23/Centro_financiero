@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchAllData, getToday } from './data.js';
 
 const T = {
@@ -10,6 +10,7 @@ const T = {
     red:"#EF5350",redD:"rgba(239,83,80,0.12)",
     amber:"#FFB74D",amberD:"rgba(255,183,77,0.12)",amberT:"#FFCC80",
     purple:"#AB47BC",purpleD:"rgba(171,71,188,0.12)",
+    cyan:"#26C6DA",cyanD:"rgba(38,198,218,0.12)",
   },
   light: {
     bg:"#F5F6F8",surface:"#FFFFFF",surfaceAlt:"#F0F1F4",border:"#E0E2E8",borderL:"#D0D3DA",
@@ -19,6 +20,7 @@ const T = {
     red:"#C62828",redD:"rgba(198,40,40,0.08)",
     amber:"#E65100",amberD:"rgba(230,81,0,0.08)",amberT:"#E65100",
     purple:"#7B1FA2",purpleD:"rgba(123,31,162,0.08)",
+    cyan:"#00838F",cyanD:"rgba(0,131,143,0.08)",
   },
 };
 
@@ -30,7 +32,7 @@ const fdf=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"sh
 
 const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Calculadora"];
 
-function M({label,value,sub,color,C}){
+function Metric({label,value,sub,color,C}){
   return(<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:130}}>
     <div style={{fontSize:11,color:C.tm,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</div>
     <div style={{fontSize:22,fontWeight:600,color:color||C.accent,lineHeight:1.2}}>{value}</div>
@@ -46,6 +48,21 @@ function Loading({C}){
   </div>);
 }
 
+function clas(tipo){
+  const t=(tipo||'').trim().toLowerCase();
+  if(t==='trabajo')return'trabajo';
+  if(t==='inversion'||t==='inversión')return'inversion';
+  if(t==='credito'||t==='crédito')return'credito';
+  return t;
+}
+
+function colorTipo(t,C){
+  if(t==='trabajo')return{bg:C.accentD,color:C.accent};
+  if(t==='inversion')return{bg:C.amberD,color:C.amber};
+  if(t==='credito')return{bg:C.cyanD,color:C.cyan};
+  return{bg:C.purpleD,color:C.purple};
+}
+
 function TabResumen({C,bancos,dap,cal,ffmm}){
   const hoy=getToday();
   const bancosHoy=bancos.filter(b=>b.fecha===hoy);
@@ -53,35 +70,38 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
   const totalIni=saldosIni.reduce((s,b)=>s+(b.saldoInicial||0),0);
   const ultimo={};bancosHoy.forEach(b=>{if(b.saldoFinal!=null)ultimo[b.banco]=b.saldoFinal;});
   const saldoAct=Object.values(ultimo).reduce((s,v)=>s+v,0);
-  
+
   const dapsV=dap.filter(d=>d.vigente==="si"||d.vigente==="sí");
   const totalDAP=dapsV.reduce((s,d)=>s+d.montoInicial,0);
   const totalGanDAP=dapsV.reduce((s,d)=>s+d.ganancia,0);
   const ganHistorica=dap.reduce((s,d)=>s+d.ganancia,0);
-  const trab=dapsV.filter(d=>d.tipo.toLowerCase()==="trabajo");
-  const inv=dapsV.filter(d=>d.tipo.toLowerCase()==="inversion"||d.tipo==="Inversion");
-  
+  const trab=dapsV.filter(d=>clas(d.tipo)==='trabajo');
+  const inv=dapsV.filter(d=>clas(d.tipo)==='inversion');
+  const cred=dapsV.filter(d=>clas(d.tipo)==='credito');
+
   const totalFFMMInv=ffmm.reduce((s,f)=>s+f.invertido,0);
   const totalFFMMAct=ffmm.reduce((s,f)=>s+f.valorActual,0);
   const totalGanFFMM=ffmm.reduce((s,f)=>s+f.rentabilidad,0);
-  
+
   const mesActual=hoy.substring(0,7);
   const calMes=cal.filter(c=>c.fecha&&c.fecha.startsWith(mesActual));
   const compMes=calMes.reduce((s,c)=>s+c.monto,0);
   const guarMes=calMes.reduce((s,c)=>s+c.guardado,0);
   const pctMes=compMes>0?guarMes/compMes:0;
-  
+
   const finSemana=new Date(hoy+"T12:00:00");
   finSemana.setDate(finSemana.getDate()+(7-finSemana.getDay()));
   const finSemStr=`${finSemana.getFullYear()}-${String(finSemana.getMonth()+1).padStart(2,"0")}-${String(finSemana.getDate()).padStart(2,"0")}`;
   const semComps=cal.filter(c=>c.fecha>=hoy&&c.fecha<=finSemStr);
   const semCubierta=semComps.length===0||semComps.every(c=>c.falta===0);
   const faltaSem=semComps.reduce((s,c)=>s+c.falta,0);
-  
+
   const proxComp=cal.filter(c=>c.fecha>=hoy).slice(0,5);
-  const proxDAP=dapsV.filter(d=>d.vencimiento>=hoy).sort((a,b)=>a.vencimiento.localeCompare(b.vencimiento)).slice(0,4);
+  // DAPs: solo mostrar los que vencen DESPUÉS de hoy (mañana en adelante)
+  const proxDAP=dapsV.filter(d=>d.vencimiento>hoy).sort((a,b)=>a.vencimiento.localeCompare(b.vencimiento)).slice(0,5);
 
   const noData=bancosHoy.length===0;
+  const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
 
   return(<div>
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"8px 12px",borderRadius:8,background:noData?C.amberD:semCubierta?C.greenD:C.amberD,border:`0.5px solid ${noData?C.amber+"44":semCubierta?C.green+"44":C.amber+"44"}`}}>
@@ -91,10 +111,10 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
       </span>
     </div>
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
-      <M C={C} label="Saldo cuentas hoy" value={saldoAct>0?f(saldoAct):"Sin datos"} sub={totalIni>0?`Inicial: ${f(totalIni)}`:undefined}/>
-      <M C={C} label="En DAP vigentes" value={f(totalDAP)} sub={`${trab.length} trabajo · ${inv.length} inversión`} color={C.amber}/>
-      <M C={C} label="Fondos mutuos" value={totalFFMMAct>0?f(totalFFMMAct):f(totalFFMMInv)} sub={totalGanFFMM>0?`Rent: +${fS(totalGanFFMM)}`:undefined} color={C.purple}/>
-      <M C={C} label={`${new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"})} cubierto`} value={`${Math.round(pctMes*100)}%`} sub={`${f(guarMes)} de ${f(compMes)}`} color={pctMes>=.9?C.green:C.amber}/>
+      <Metric C={C} label="Saldo cuentas hoy" value={saldoAct>0?f(saldoAct):"Sin datos"} sub={totalIni>0?`Inicial: ${f(totalIni)}`:undefined}/>
+      <Metric C={C} label="En DAP vigentes" value={f(totalDAP)} sub={`${trab.length} trabajo · ${inv.length} inversión · ${cred.length} crédito`} color={C.amber}/>
+      <Metric C={C} label="Fondos mutuos" value={totalFFMMAct>0?f(totalFFMMAct):f(totalFFMMInv)} sub={totalGanFFMM>0?`Rent: +${fS(totalGanFFMM)}`:undefined} color={C.purple}/>
+      <Metric C={C} label={`${mesLabel} cubierto`} value={`${Math.round(pctMes*100)}%`} sub={`${f(guarMes)} de ${f(compMes)}`} color={pctMes>=.9?C.green:C.amber}/>
     </div>
     <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`,marginBottom:12}}>
       <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Consolidado inversiones</div>
@@ -102,6 +122,7 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
         <div style={{color:C.td,fontSize:11}}>Concepto</div><div style={{color:C.td,fontSize:11,textAlign:"right"}}>Monto</div><div style={{color:C.td,fontSize:11,textAlign:"right"}}>Ganancia</div>
         <div style={{color:C.text}}>DAP Trabajo</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.text}}>{fS(trab.reduce((s,d)=>s+d.montoInicial,0))}</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.green}}>+{fS(trab.reduce((s,d)=>s+d.ganancia,0))}</div>
         <div style={{color:C.text}}>DAP Inversión</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.text}}>{fS(inv.reduce((s,d)=>s+d.montoInicial,0))}</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.green}}>+{fS(inv.reduce((s,d)=>s+d.ganancia,0))}</div>
+        <div style={{color:C.text}}>DAP Crédito</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.text}}>{fS(cred.reduce((s,d)=>s+d.montoInicial,0))}</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.green}}>+{fS(cred.reduce((s,d)=>s+d.ganancia,0))}</div>
         <div style={{color:C.text}}>Fondos Mutuos</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.text}}>{fS(totalFFMMInv)}</div><div style={{textAlign:"right",fontFamily:"monospace",color:C.green}}>+{fS(totalGanFFMM)}</div>
         <div style={{borderTop:`0.5px solid ${C.border}`,paddingTop:6,fontWeight:600,color:C.text}}>Total</div>
         <div style={{borderTop:`0.5px solid ${C.border}`,paddingTop:6,textAlign:"right",fontFamily:"monospace",fontWeight:600,color:C.accent}}>{fS(totalDAP+totalFFMMInv)}</div>
@@ -122,11 +143,11 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
       </div>
       <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`}}>
         <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase"}}>DAPs próximos a vencer</div>
-        {proxDAP.length===0?<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Sin DAPs próximos</div>:
-        proxDAP.map((d,i)=>{const dias=dd(hoy,d.vencimiento);return(
+        {proxDAP.length===0?<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Sin DAPs por vencer</div>:
+        proxDAP.map((d,i)=>{const dias=dd(hoy,d.vencimiento);const tc=colorTipo(clas(d.tipo),C);return(
           <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<proxDAP.length-1?`0.5px solid ${C.border}`:"none"}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:d.tipo.toLowerCase()==="trabajo"?C.accent:C.amber,flexShrink:0}}/>
-            <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.comentario||`DAP ${d.banco}`}</div><div style={{fontSize:11,color:C.td}}>Vence {fdf(d.vencimiento)} · {dias<=0?"hoy":dias===1?"mañana":`en ${dias}d`}</div></div>
+            <div style={{width:8,height:8,borderRadius:"50%",background:tc.color,flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.comentario||`DAP ${d.banco}`}</div><div style={{fontSize:11,color:C.td}}>Vence {fdf(d.vencimiento)} · {dias===1?"mañana":`en ${dias}d`}</div></div>
             <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:13,fontWeight:500,color:C.text}}>{fS(d.montoInicial)}</div><div style={{fontSize:10,color:C.green}}>+{fS(d.ganancia)}</div></div>
           </div>);})}
       </div>
@@ -146,16 +167,14 @@ function TabBancos({C,bancos}){
   const [bancoSel,setBancoSel]=useState("TODOS");
   const movs=bancos.filter(b=>b.fecha===fechaSel&&(bancoSel==="TODOS"||b.banco===bancoSel));
   const bancosUniq=[...new Set(bancos.filter(b=>b.fecha===fechaSel).map(b=>b.banco))];
-  
-  useEffect(()=>{if(fechas[0]&&!fechaSel)setFechaSel(fechas[0]);},[fechas]);
-
+  useEffect(()=>{if(fechas[0]&&!fechaSel)setFechaSel(fechas[0]);},[fechas.join(',')]);
   return(<div>
     <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
-      <select value={fechaSel} onChange={e=>setFechaSel(e.target.value)} style={{padding:"6px 12px",borderRadius:6,fontSize:12,background:C.surfaceAlt,color:C.text,border:`0.5px solid ${C.border}`}}>
+      <select value={fechaSel} onChange={e=>{setFechaSel(e.target.value);setBancoSel("TODOS");}} style={{padding:"6px 12px",borderRadius:6,fontSize:12,background:C.surfaceAlt,color:C.text,border:`0.5px solid ${C.border}`}}>
         {fechas.map(f=><option key={f} value={f}>{new Date(f+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"2-digit",month:"short",year:"numeric"})}</option>)}
       </select>
-      <div style={{display:"flex",gap:4}}>
-        {["TODOS",...bancosUniq].map(b=>(<button key={b} onClick={()=>setBancoSel(b)} style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:500,background:bancoSel===b?C.accent:C.surfaceAlt,color:bancoSel===b?(T.dark===C?"#0C1117":"#fff"):C.tm,border:`0.5px solid ${bancoSel===b?C.accent:C.border}`,cursor:"pointer"}}>{b}</button>))}
+      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        {["TODOS",...bancosUniq].map(b=>(<button key={b} onClick={()=>setBancoSel(b)} style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:500,background:bancoSel===b?C.accent:C.surfaceAlt,color:bancoSel===b?"#fff":C.tm,border:`0.5px solid ${bancoSel===b?C.accent:C.border}`,cursor:"pointer"}}>{b}</button>))}
       </div>
     </div>
     <div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden"}}>
@@ -203,27 +222,29 @@ function TabCalendario({C,cal}){
 function TabInversiones({C,dap}){
   const hoy=getToday();
   const vigentes=dap.filter(d=>d.vigente==="si"||d.vigente==="sí");
-  const trab=vigentes.filter(d=>d.tipo.toLowerCase()==="trabajo");
-  const inv=vigentes.filter(d=>d.tipo.toLowerCase()==="inversion"||d.tipo==="Inversion");
+  const trab=vigentes.filter(d=>clas(d.tipo)==='trabajo');
+  const inv=vigentes.filter(d=>clas(d.tipo)==='inversion');
+  const cred=vigentes.filter(d=>clas(d.tipo)==='credito');
   const ganHist=dap.reduce((s,d)=>s+d.ganancia,0);
   return(<div>
     <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-      <M C={C} label="DAP trabajo" value={f(trab.reduce((s,d)=>s+d.montoInicial,0))} sub={`${trab.length} depósitos`}/>
-      <M C={C} label="DAP inversión" value={f(inv.reduce((s,d)=>s+d.montoInicial,0))} sub={`${inv.length} depósitos`} color={C.amber}/>
-      <M C={C} label="Ganancia activos" value={f(vigentes.reduce((s,d)=>s+d.ganancia,0))} sub="Intereses vigentes" color={C.green}/>
-      <M C={C} label="Ganancia histórica" value={f(ganHist)} sub="Desde 2022" color={C.green}/>
+      <Metric C={C} label="DAP trabajo" value={f(trab.reduce((s,d)=>s+d.montoInicial,0))} sub={`${trab.length} depósitos`}/>
+      <Metric C={C} label="DAP inversión" value={f(inv.reduce((s,d)=>s+d.montoInicial,0))} sub={`${inv.length} depósitos`} color={C.amber}/>
+      <Metric C={C} label="DAP crédito" value={f(cred.reduce((s,d)=>s+d.montoInicial,0))} sub={`${cred.length} depósitos`} color={C.cyan}/>
+      <Metric C={C} label="Ganancia activos" value={f(vigentes.reduce((s,d)=>s+d.ganancia,0))} sub="Intereses vigentes" color={C.green}/>
+      <Metric C={C} label="Ganancia histórica" value={f(ganHist)} sub="Desde 2022" color={C.green}/>
     </div>
     <div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden"}}>
       <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${C.borderL}`,fontSize:12,color:C.tm,textTransform:"uppercase"}}>DAPs vigentes ({vigentes.length})</div>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr>{["Tipo","Banco","Inicio","Vence","Días","Tasa","Monto","Ganancia","Para qué"].map(h=>(<th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:10,color:C.td,fontWeight:500,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
-          <tbody>{vigentes.sort((a,b)=>(a.vencimiento||"").localeCompare(b.vencimiento||"")).map((d,i)=>{const dias=d.vencimiento?dd(hoy,d.vencimiento):999;return(
+          <tbody>{vigentes.sort((a,b)=>(a.vencimiento||"").localeCompare(b.vencimiento||"")).map((d,i)=>{const dias=d.vencimiento?dd(hoy,d.vencimiento):999;const tc=colorTipo(clas(d.tipo),C);return(
             <tr key={i} style={{borderTop:`0.5px solid ${C.border}`}}>
-              <td style={{padding:"8px 10px"}}><span style={{padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:500,background:d.tipo.toLowerCase()==="trabajo"?C.accentD:C.amberD,color:d.tipo.toLowerCase()==="trabajo"?C.accent:C.amber}}>{d.tipo}</span></td>
+              <td style={{padding:"8px 10px"}}><span style={{padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:500,background:tc.bg,color:tc.color}}>{d.tipo}</span></td>
               <td style={{padding:"8px 10px",color:C.tm}}>{d.banco}</td>
               <td style={{padding:"8px 10px",color:C.tm}}>{fd(d.fechaInicio)}</td>
-              <td style={{padding:"8px 10px",color:dias<=3?C.amber:C.text,fontWeight:dias<=3?600:400}}>{fd(d.vencimiento)} {dias<=3&&dias>=0?`(${dias}d)`:""}</td>
+              <td style={{padding:"8px 10px",color:dias<=3&&dias>=0?C.amber:C.text,fontWeight:dias<=3&&dias>=0?600:400}}>{fd(d.vencimiento)} {dias<=3&&dias>=0?`(${dias}d)`:""}</td>
               <td style={{padding:"8px 10px",color:C.tm,textAlign:"center"}}>{d.dias}</td>
               <td style={{padding:"8px 10px",color:C.tm}}>{d.tasa?(d.tasa*100).toFixed(2)+"%":"—"}</td>
               <td style={{padding:"8px 10px",fontFamily:"monospace",color:C.text,fontWeight:500}}>{fS(d.montoInicial)}</td>
@@ -242,16 +263,16 @@ function TabFFMM({C,ffmm,movimientos}){
   const totalRent=ffmm.reduce((s,f)=>s+f.rentabilidad,0);
   return(<div>
     <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-      <M C={C} label="Total invertido" value={f(totalInv)} sub={`${ffmm.length} fondos activos`} color={C.purple}/>
-      <M C={C} label="Valor actual" value={totalAct>0?f(totalAct):"Actualizar en hoja"} color={C.accent}/>
-      <M C={C} label="Rentabilidad" value={totalRent>0?f(totalRent):"—"} sub={totalRent>0?`${(totalRent/totalInv*100).toFixed(2)}%`:undefined} color={C.green}/>
+      <Metric C={C} label="Total invertido" value={f(totalInv)} sub={`${ffmm.length} fondos activos`} color={C.purple}/>
+      <Metric C={C} label="Valor actual" value={totalAct>0?f(totalAct):"Actualizar en hoja"} color={C.accent}/>
+      <Metric C={C} label="Rentabilidad" value={totalRent>0?f(totalRent):"—"} sub={totalRent>0&&totalInv>0?`${(totalRent/totalInv*100).toFixed(2)}%`:undefined} color={C.green}/>
     </div>
     <div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden",marginBottom:14}}>
       <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${C.borderL}`,fontSize:12,color:C.tm,textTransform:"uppercase"}}>Saldos vigentes por fondo</div>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
           <thead><tr>{["Empresa","Fondo","Admin.","Invertido","Valor actual","Rent.","Rent. %"].map(h=>(<th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:10,color:C.td,fontWeight:500,textTransform:"uppercase"}}>{h}</th>))}</tr></thead>
-          <tbody>{ffmm.length===0?<tr><td colSpan={7} style={{padding:20,textAlign:"center",color:C.td}}>Ingresa fondos mutuos en la hoja "Fondos Mutuos"</td></tr>:
+          <tbody>{ffmm.length===0?<tr><td colSpan={7} style={{padding:20,textAlign:"center",color:C.td}}>Ingresa fondos mutuos en la hoja</td></tr>:
             ffmm.map((fm,i)=>(<tr key={i} style={{borderTop:`0.5px solid ${C.border}`}}>
               <td style={{padding:"8px 12px",color:C.text}}>{fm.empresa}</td>
               <td style={{padding:"8px 12px",color:C.text}}>{fm.fondo}</td>
@@ -322,7 +343,7 @@ function TabCalc({C}){
 
 export default function App(){
   const [tab,setTab]=useState(0);
-  const [theme,setTheme]=useState(()=>localStorage.getItem('cmf-theme')||'dark');
+  const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('cmf-theme')||'dark';}catch(e){return'dark';}});
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
@@ -336,8 +357,7 @@ export default function App(){
   };
 
   useEffect(()=>{load();},[]);
-  useEffect(()=>{localStorage.setItem('cmf-theme',theme);},[theme]);
-  // Auto-refresh every 5 minutes
+  useEffect(()=>{try{localStorage.setItem('cmf-theme',theme);}catch(e){}},[theme]);
   useEffect(()=>{const iv=setInterval(load,5*60*1000);return()=>clearInterval(iv);},[]);
 
   return(
