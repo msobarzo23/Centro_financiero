@@ -114,10 +114,11 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
 
   // ── Leasing en Resumen ───────────────────────────────────────────────────
   const totalDeudaLeasingUF=leasingDetalle.reduce((s,d)=>s+d.deudaUF,0);
-  // Próximas 2 cuotas del Leasing_Resumen (proyección mensual)
-  const proxCuotasLeasing=leasingResumen.slice(0,2);
-  const cuotaMesActualLeasing=proxCuotasLeasing[0]?.cuotaCLPcIVA||0;
   const nContratosLeasing=leasingDetalle.length;
+  // Cuotas calculadas desde leasingDetalle agrupando por día de vencimiento
+  const cuotaDia5 =leasingDetalle.filter(d=>d.diaVto===5 ||d.diaVto===4 ).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
+  const cuotaDia15=leasingDetalle.filter(d=>d.diaVto===15||d.diaVto===14).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
+  const cuotaTotalLeasing=leasingDetalle.reduce((s,d)=>s+d.cuotaCLPcIVA,0);
 
   const noData=bancosHoy.length===0;
   const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
@@ -139,10 +140,22 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
     </div>
 
     {/* ── Métricas Leasing ── */}
-    {(nContratosLeasing>0||cuotaMesActualLeasing>0)&&<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
-      <Metric C={C} label="Deuda leasing total" value={`${fUF(totalDeudaLeasingUF)} UF`} sub={`${nContratosLeasing} contratos activos`} color={C.teal}/>
-      <Metric C={C} label="Cuota leasing este mes" value={f(cuotaMesActualLeasing)} sub={proxCuotasLeasing[0]?`${proxCuotasLeasing[0].mes} ${proxCuotasLeasing[0].anio}`:undefined} color={C.teal}/>
-      {proxCuotasLeasing[1]&&<Metric C={C} label="Cuota próximo mes" value={f(proxCuotasLeasing[1].cuotaCLPcIVA)} sub={`${proxCuotasLeasing[1].mes} ${proxCuotasLeasing[1].anio}`} color={C.td}/>}
+    {nContratosLeasing>0&&<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{fontSize:11,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Leasing tractos · {nContratosLeasing} contratos · {fUF(totalDeudaLeasingUF)} UF</div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {cuotaDia5>0&&<div style={{flex:1,minWidth:120}}>
+          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 5 cada mes</div>
+          <div style={{fontSize:18,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia5)}</div>
+        </div>}
+        {cuotaDia15>0&&<div style={{flex:1,minWidth:120}}>
+          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 15 cada mes</div>
+          <div style={{fontSize:18,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia15)}</div>
+        </div>}
+        <div style={{flex:1,minWidth:120,borderLeft:cuotaDia5>0||cuotaDia15>0?`0.5px solid ${C.border}`:"none",paddingLeft:cuotaDia5>0||cuotaDia15>0?12:0}}>
+          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Total mensual c/IVA</div>
+          <div style={{fontSize:18,fontWeight:700,color:C.amber,fontFamily:"monospace"}}>{f(cuotaTotalLeasing)}</div>
+        </div>
+      </div>
     </div>}
 
     {/* ── Consolidado inversiones ── */}
