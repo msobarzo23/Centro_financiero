@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 
 const BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub';
+const VENTAS_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS07T19mYyF8IMvUMlgaOXG1uJboEoeFvlYtOqMGCwMx_uzAVxy_vKHFL-AjMxCA_lbG8uvBxjFzZpV/pub?gid=0&single=true&output=csv';
 
 const SHEETS = {
   bancos:          `${BASE}?gid=1699395114&single=true&output=csv`,
@@ -12,7 +13,6 @@ const SHEETS = {
   credito:         `${BASE}?gid=1158539978&single=true&output=csv`,
 };
 
-// Skip title rows (first 3 rows are title/description/blank)
 function skipTitleRows(text) {
   const lines = text.split('\n');
   let headerIdx = 0;
@@ -31,7 +31,6 @@ function parseCSV(text) {
   return Papa.parse(cleaned, { header: true, skipEmptyLines: true }).data;
 }
 
-// Parse Chilean number format: 684.491.358 or $684.491.358 or (123.456)
 function parseNum(v) {
   if (v == null || v === '' || v === '-' || v === '—') return null;
   let s = String(v).trim();
@@ -57,7 +56,6 @@ function parseNum(v) {
   return isNaN(n) ? null : (isNeg ? -n : n);
 }
 
-// Parse tasa: "0,560%" or "0.39%" or 0.0039
 function parsePct(v) {
   if (v == null || v === '' || v === '-') return null;
   let s = String(v).trim().replace('%', '').replace(',', '.').replace(/"/g, '');
@@ -67,7 +65,6 @@ function parsePct(v) {
   return n;
 }
 
-// Parse date DD/MM/YYYY or YYYY-MM-DD
 function parseDate(v) {
   if (!v) return null;
   const s = String(v).trim();
@@ -82,14 +79,11 @@ function parseDate(v) {
   return null;
 }
 
-// Encuentra la fila de encabezado en hojas con títulos decorativos arriba.
-// Busca la primera fila que contenga TODAS las palabras clave indicadas.
 function findHeaderIdx(lines, keywords) {
   for (let i = 0; i < Math.min(lines.length, 15); i++) {
     const lineUp = lines[i].toUpperCase();
     if (keywords.every(k => lineUp.includes(k.toUpperCase()))) return i;
   }
-  // Fallback: buscar cualquiera
   for (let i = 0; i < Math.min(lines.length, 15); i++) {
     const lineUp = lines[i].toUpperCase();
     if (keywords.some(k => lineUp.includes(k.toUpperCase()))) return i;
@@ -97,8 +91,6 @@ function findHeaderIdx(lines, keywords) {
   return 0;
 }
 
-// Parsea número entero chileno SIN decimales: 29.481.984 → 29481984
-// Los puntos son siempre separadores de miles (no hay decimales en CLP).
 function parseNumCLP(v) {
   if (v == null || v === '' || v === '-' || v === '—') return 0;
   const s = String(v).trim().replace(/\$/g, '').replace(/\s/g, '').replace(/\./g, '');
@@ -106,24 +98,15 @@ function parseNumCLP(v) {
   return isNaN(n) ? 0 : n;
 }
 
-// Parsea número UF con coma decimal: "3.730,98" → 3730.98
-// Puntos = miles, coma = decimal.
 function parseNumUF(v) {
   if (v == null || v === '' || v === '-' || v === '—') return 0;
   let s = String(v).trim().replace(/\$/g, '').replace(/\s/g, '');
-  // "3.730,98" → remove dots → "373098" → replace comma → "3730.98"
   s = s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 
-// Limpia texto CSV de leasing: los headers tienen saltos de línea dentro de
-// celdas con comillas ("Cuota CLP\nc/IVA"). Papa los maneja bien si le pasamos
-// el texto raw completo, pero necesitamos normalizar los headers resultantes
-// para poder acceder por nombre sin depender del salto de línea.
 function normalizeLeasingHeaders(parsed) {
-  // Papa.parse devuelve { data, meta }. Los campos con \n en el header quedan
-  // como "Cuota CLP\nc/IVA". Los normalizamos reemplazando \n por espacio.
   const remap = {};
   (parsed.meta.fields || []).forEach(f => {
     const clean = f.replace(/\r?\n/g, ' ').trim();
@@ -140,13 +123,80 @@ function normalizeLeasingHeaders(parsed) {
   });
 }
 
+// ── Ventas: detecta si la factura lleva IVA ──────────────────────────────────
+function esAfecta(documento) {
+  const d = (documento || '').toUpperCase();
+  // Exenta o No Afecta → sin IVA
+  if (d.includes('EXENTA') || d.includes('NO AFECTA') || d.includes('EXENTO')) return false;
+  // Factura Electrónica → con IVA
+  return true;
+}
+
+// ── Parsea la hoja de ventas y construye los agregados para flujo de caja ────
+function parseVentas(text) {
+  const raw = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+
+  // Filas individuales con fecha + monto con IVA cuando corresponde
+  const rows = raw
+    .filter(r => {
+      const fecha = parseDate(r['FECHA'] || r['Fecha'] || '');
+      const neto = parseNum(r['NETO'] || r['Neto'] || '');
+      return fecha && neto != null && neto > 0;
+    })
+    .map(r => {
+      const fecha = parseDate(r['FECHA'] || r['Fecha'] || '');
+      const neto = parseNum(r['NETO'] || r['Neto'] || '') || 0;
+      const doc = r['DOCUMENTO'] || r['Documento'] || '';
+      const afecta = esAfecta(doc);
+      const montoReal = afecta ? Math.round(neto * 1.19) : neto; // IVA 19%
+      return {
+        fecha,
+        neto,
+        montoReal,   // lo que llega al banco
+        afecta,
+        razonSocial: (r['RAZON SOCIAL'] || r['Razón Social'] || '').trim(),
+        folio: r['FOLIO'] || r['Folio'] || '',
+      };
+    });
+
+  // Agrupar por mes YYYY-MM
+  const porMes = {};
+  rows.forEach(r => {
+    const mes = r.fecha.substring(0, 7);
+    if (!porMes[mes]) porMes[mes] = { mes, neto: 0, montoReal: 0, facturas: 0 };
+    porMes[mes].neto += r.neto;
+    porMes[mes].montoReal += r.montoReal;
+    porMes[mes].facturas += 1;
+  });
+
+  // Agrupar por día YYYY-MM-DD
+  const porDia = {};
+  rows.forEach(r => {
+    if (!porDia[r.fecha]) porDia[r.fecha] = { fecha: r.fecha, neto: 0, montoReal: 0, facturas: 0 };
+    porDia[r.fecha].neto += r.neto;
+    porDia[r.fecha].montoReal += r.montoReal;
+    porDia[r.fecha].facturas += 1;
+  });
+
+  return {
+    rows,
+    porMes: Object.values(porMes).sort((a, b) => a.mes.localeCompare(b.mes)),
+    porDia: Object.values(porDia).sort((a, b) => a.fecha.localeCompare(b.fecha)),
+  };
+}
+
 export async function fetchAllData() {
-  const results = await Promise.all(
-    Object.values(SHEETS).map(url =>
+  // Fetches en paralelo: hojas internas + ventas
+  const [
+    bancosText, dapText, calText, ffmmText,
+    leasingDetText, leasingResText, creditoText,
+    ventasText,
+  ] = await Promise.all([
+    ...Object.values(SHEETS).map(url =>
       fetch(url, { cache: 'no-store' }).then(r => r.text()).catch(() => '')
-    )
-  );
-  const [bancosText, dapText, calText, ffmmText, leasingDetText, leasingResText, creditoText] = results;
+    ),
+    fetch(VENTAS_URL, { cache: 'no-store' }).then(r => r.text()).catch(() => ''),
+  ]);
 
   // ── Bancos ────────────────────────────────────────────────────────────────
   const bancosRaw = parseCSV(bancosText);
@@ -255,14 +305,7 @@ export async function fetchAllData() {
     }
   }
 
-  // ── LEASING DETALLE (NUEVO) ───────────────────────────────────────────────
-  // La hoja tiene 3 filas de título antes del header real (fila 4).
-  // Los headers tienen saltos de línea dentro de comillas, ej:
-  //   "Cuota CLP\nc/IVA" → Papa lo lee con \n en el key.
-  // Usamos normalizeLeasingHeaders() para aplanar esos keys a espacio.
-  // Formatos numéricos:
-  //   UF:  "3.730,98"   → coma decimal  → parseNumUF
-  //   CLP: 29.481.984   → puntos=miles, sin decimales → parseNumCLP
+  // ── LEASING DETALLE ───────────────────────────────────────────────────────
   const leasingDetLines = leasingDetText.split('\n');
   const leasingDetHeaderIdx = findHeaderIdx(leasingDetLines, ['ID', 'BANCO']);
   const leasingDetCSV = leasingDetLines.slice(leasingDetHeaderIdx).join('\n');
@@ -296,9 +339,7 @@ export async function fetchAllData() {
       };
     });
 
-  // ── LEASING RESUMEN (NUEVO) ───────────────────────────────────────────────
-  // Header contiene "Mes" y "Cuota" en la misma fila.
-  // CLP con IVA → parseNumCLP, UF → parseNumUF.
+  // ── LEASING RESUMEN ───────────────────────────────────────────────────────
   const leasingResLines = leasingResText.split('\n');
   const leasingResHeaderIdx = findHeaderIdx(leasingResLines, ['MES', 'CUOTA']);
   const leasingResCSV = leasingResLines.slice(leasingResHeaderIdx).join('\n');
@@ -328,9 +369,7 @@ export async function fetchAllData() {
       };
     });
 
-  // ── CRÉDITO COMERCIAL ────────────────────────────────────────────────────
-  // CSV tiene header en fila 1 directamente, sin títulos decorativos.
-  // Formato CLP con $: "$5.000.000.000" → parseNumCLP tras quitar $
+  // ── CRÉDITO COMERCIAL ─────────────────────────────────────────────────────
   const creditoRaw = Papa.parse(creditoText, { header: true, skipEmptyLines: true }).data;
   const hoyCredito = getToday();
 
@@ -352,14 +391,13 @@ export async function fetchAllData() {
       };
     });
 
-  // Cuotas pendientes = las que vencen hoy o después
   const creditoPendiente = credito.filter(c => c.fechaVenc >= hoyCredito);
-  // Total a pagar = suma de valorCuota de todas las cuotas pendientes con pago real
-  // Esto es el flujo real de caja: capital + intereses futuros (lo que efectivamente sale del banco)
-  // El IVA del leasing se recupera, pero el crédito no tiene IVA → ambos comparables s/IVA
   const saldoInsolutoActual = creditoPendiente
     .filter(c => c.valorCuota > 0)
     .reduce((s, c) => s + c.valorCuota, 0);
+
+  // ── VENTAS ────────────────────────────────────────────────────────────────
+  const ventas = parseVentas(ventasText);
 
   return {
     bancos,
@@ -372,6 +410,7 @@ export async function fetchAllData() {
     credito,
     creditoPendiente,
     saldoInsolutoActual,
+    ventas,
   };
 }
 
