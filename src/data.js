@@ -96,6 +96,49 @@ function findHeaderIdx(lines, keywords) {
   return 0;
 }
 
+// Parsea número entero chileno SIN decimales: 29.481.984 → 29481984
+// Los puntos son siempre separadores de miles (no hay decimales en CLP).
+function parseNumCLP(v) {
+  if (v == null || v === '' || v === '-' || v === '—') return 0;
+  const s = String(v).trim().replace(/\$/g, '').replace(/\s/g, '').replace(/\./g, '');
+  const n = parseInt(s, 10);
+  return isNaN(n) ? 0 : n;
+}
+
+// Parsea número UF con coma decimal: "3.730,98" → 3730.98
+// Puntos = miles, coma = decimal.
+function parseNumUF(v) {
+  if (v == null || v === '' || v === '-' || v === '—') return 0;
+  let s = String(v).trim().replace(/\$/g, '').replace(/\s/g, '');
+  // "3.730,98" → remove dots → "373098" → replace comma → "3730.98"
+  s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// Limpia texto CSV de leasing: los headers tienen saltos de línea dentro de
+// celdas con comillas ("Cuota CLP\nc/IVA"). Papa los maneja bien si le pasamos
+// el texto raw completo, pero necesitamos normalizar los headers resultantes
+// para poder acceder por nombre sin depender del salto de línea.
+function normalizeLeasingHeaders(parsed) {
+  // Papa.parse devuelve { data, meta }. Los campos con \n en el header quedan
+  // como "Cuota CLP\nc/IVA". Los normalizamos reemplazando \n por espacio.
+  const remap = {};
+  (parsed.meta.fields || []).forEach(f => {
+    const clean = f.replace(/\r?\n/g, ' ').trim();
+    if (clean !== f) remap[f] = clean;
+  });
+  if (Object.keys(remap).length === 0) return parsed.data;
+  return parsed.data.map(row => {
+    const newRow = { ...row };
+    Object.entries(remap).forEach(([oldKey, newKey]) => {
+      newRow[newKey] = newRow[oldKey];
+      delete newRow[oldKey];
+    });
+    return newRow;
+  });
+}
+
 export async function fetchAllData() {
   const results = await Promise.all(
     Object.values(SHEETS).map(url =>
@@ -212,63 +255,77 @@ export async function fetchAllData() {
   }
 
   // ── LEASING DETALLE (NUEVO) ───────────────────────────────────────────────
-  // Header contiene "ID", "Banco" y "Estado" en la misma fila.
+  // La hoja tiene 3 filas de título antes del header real (fila 4).
+  // Los headers tienen saltos de línea dentro de comillas, ej:
+  //   "Cuota CLP\nc/IVA" → Papa lo lee con \n en el key.
+  // Usamos normalizeLeasingHeaders() para aplanar esos keys a espacio.
+  // Formatos numéricos:
+  //   UF:  "3.730,98"   → coma decimal  → parseNumUF
+  //   CLP: 29.481.984   → puntos=miles, sin decimales → parseNumCLP
   const leasingDetLines = leasingDetText.split('\n');
-  const leasingDetHeaderIdx = findHeaderIdx(leasingDetLines, ['ID', 'BANCO', 'ESTADO']);
+  const leasingDetHeaderIdx = findHeaderIdx(leasingDetLines, ['ID', 'BANCO']);
   const leasingDetCSV = leasingDetLines.slice(leasingDetHeaderIdx).join('\n');
-  const leasingDetRaw = Papa.parse(leasingDetCSV, { header: true, skipEmptyLines: true }).data;
+  const leasingDetParsed = Papa.parse(leasingDetCSV, { header: true, skipEmptyLines: true });
+  const leasingDetNorm = normalizeLeasingHeaders(leasingDetParsed);
 
-  const leasingDetalle = leasingDetRaw
+  const leasingDetalle = leasingDetNorm
     .filter(r => {
       const banco = (r['Banco / Emisor'] || r['Banco/Emisor'] || r['Banco'] || '').trim();
       const estado = (r['Estado'] || '').trim().toUpperCase();
       return banco !== '' && !banco.toUpperCase().includes('TOTAL') && estado === 'ACTIVO';
     })
-    .map(r => ({
-      id:             (r['ID'] || '').trim(),
-      banco:          (r['Banco / Emisor'] || r['Banco/Emisor'] || r['Banco'] || '').trim(),
-      nTractos:       parseNum(r['N Tractos'] || r['N° Tractos'] || '') || 0,
-      cuotaUFIndiv:   parseNum(r['Cuota UF Individual'] || '') || 0,
-      cuotaUFGrupo:   parseNum(r['Cuota UF Total Grupo'] || r['Cuota UF Grupo'] || '') || 0,
-      diaVto:         parseNum(r['Dia Vcto'] || r['Día Vcto'] || '') || 0,
-      fechaInicio:    parseDate(r['Fecha Inicio']) || '',
-      fechaFin:       parseDate(r['Fecha Fin (Vencimiento)'] || r['Fecha Fin'] || r['Vencimiento'] || '') || '',
-      cuotasTotales:  parseNum(r['Cuotas Totales'] || '') || 0,
-      cuotasPagadas:  parseNum(r['Cuotas Pagadas'] || '') || 0,
-      cuotasPorPagar: parseNum(r['Cuotas Por Pagar'] || '') || 0,
-      estado:         (r['Estado'] || '').trim(),
-      deudaUF:        parseNum(r['Deuda Pendiente UF'] || '') || 0,
-      cuotaCLPsIVA:   parseNum(r['Cuota CLP s/IVA'] || r['Cuota CLP s IVA'] || '') || 0,
-      cuotaCLPcIVA:   parseNum(r['Cuota CLP c/IVA'] || r['Cuota CLP c IVA'] || '') || 0,
-    }));
+    .map(r => {
+      const g = (...keys) => { for (const k of keys) { if (r[k] != null && r[k] !== '') return r[k]; } return ''; };
+      return {
+        id:             (r['ID'] || '').trim(),
+        banco:          g('Banco / Emisor', 'Banco/Emisor', 'Banco').trim(),
+        nTractos:       parseNum(g('N Tractos', 'N° Tractos')) || 0,
+        cuotaUFIndiv:   parseNumUF(g('Cuota UF Individual', 'Cuota UF  Individual')),
+        cuotaUFGrupo:   parseNumUF(g('Cuota UF Total Grupo', 'Cuota UF  Total Grupo', 'Cuota UF Grupo')),
+        diaVto:         parseNum(g('Dia Vcto', 'Día Vcto')) || 0,
+        fechaInicio:    parseDate(g('Fecha Inicio')) || '',
+        fechaFin:       parseDate(g('Fecha Fin (Vencimiento)', 'Fecha Fin  (Vencimiento)', 'Fecha Fin', 'Vencimiento')) || '',
+        cuotasTotales:  parseNum(g('Cuotas Totales', 'Cuotas  Totales')) || 0,
+        cuotasPagadas:  parseNum(g('Cuotas Pagadas', 'Cuotas  Pagadas')) || 0,
+        cuotasPorPagar: parseNum(g('Cuotas Por Pagar', 'Cuotas Por  Pagar')) || 0,
+        estado:         (r['Estado'] || '').trim(),
+        deudaUF:        parseNumUF(g('Deuda Pendiente UF', 'Deuda  Pendiente UF')),
+        cuotaCLPsIVA:   parseNumCLP(g('Cuota CLP s/IVA', 'Cuota CLP  s/IVA', 'Cuota CLP s IVA')),
+        cuotaCLPcIVA:   parseNumCLP(g('Cuota CLP c/IVA', 'Cuota CLP  c/IVA', 'Cuota CLP c IVA')),
+      };
+    });
 
   // ── LEASING RESUMEN (NUEVO) ───────────────────────────────────────────────
   // Header contiene "Mes" y "Cuota" en la misma fila.
+  // CLP con IVA → parseNumCLP, UF → parseNumUF.
   const leasingResLines = leasingResText.split('\n');
   const leasingResHeaderIdx = findHeaderIdx(leasingResLines, ['MES', 'CUOTA']);
   const leasingResCSV = leasingResLines.slice(leasingResHeaderIdx).join('\n');
-  const leasingResRaw = Papa.parse(leasingResCSV, { header: true, skipEmptyLines: true }).data;
+  const leasingResParsed = Papa.parse(leasingResCSV, { header: true, skipEmptyLines: true });
+  const leasingResNorm = normalizeLeasingHeaders(leasingResParsed);
 
-  const leasingResumen = leasingResRaw
+  const leasingResumen = leasingResNorm
     .filter(r => {
       const mes = (r['Mes'] || '').trim();
       return mes !== '' && mes.toUpperCase() !== 'MES' && !mes.toUpperCase().includes('TOTAL');
     })
-    .map(r => ({
-      mes:              (r['Mes'] || '').trim(),
-      anio:             (r['Anio'] || r['Año'] || '').trim(),
-      cuotaUFTotal:     parseNum(r['Cuota UF Total Mes'] || r['Cuota UF Total'] || '') || 0,
-      cuotaCLPsIVA:     parseNum(r['Cuota CLP s/IVA'] || r['Cuota CLP s IVA'] || '') || 0,
-      cuotaCLPcIVA:     parseNum(r['Cuota CLP c/IVA'] || r['Cuota CLP c IVA'] || '') || 0,
-      // BCI cobra en dos fechas distintas (día 5 y día 15)
-      bciDia5:          parseNum(r['BCI (UF) Dia 5'] || r['BCI (UF) Día 5'] || r['BCI Dia5'] || r['BCI (UF)'] || '') || 0,
-      bciDia15:         parseNum(r['BCI (UF) Dia 15'] || r['BCI (UF) Día 15'] || r['BCI Dia15'] || '') || 0,
-      vfsVolvo:         parseNum(r['VFS VOLVO (UF)'] || r['VFS VOLVO'] || r['VFS (UF)'] || '') || 0,
-      bancoChile:       parseNum(r['BANCO DE CHILE (UF)'] || r['BANCO DE CHILE'] || r['Banco Chile (UF)'] || '') || 0,
-      contratosActivos: parseNum(r['Contratos Activos'] || '') || 0,
-      vesteEstesMes:    (r['Vence este mes'] || '').trim(),
-      delta:            parseNum(r['Delta vs mes anterior'] || r['Delta'] || '') || 0,
-    }));
+    .map(r => {
+      const g = (...keys) => { for (const k of keys) { if (r[k] != null && r[k] !== '') return r[k]; } return ''; };
+      return {
+        mes:              (r['Mes'] || '').trim(),
+        anio:             (r['Anio'] || r['Año'] || '').trim(),
+        cuotaUFTotal:     parseNumUF(g('Cuota UF Total Mes', 'Cuota UF Total')),
+        cuotaCLPsIVA:     parseNumCLP(g('Cuota CLP s/IVA', 'Cuota CLP s IVA')),
+        cuotaCLPcIVA:     parseNumCLP(g('Cuota CLP c/IVA', 'Cuota CLP c IVA')),
+        bciDia5:          parseNumUF(g('BCI (UF) Dia 5', 'BCI (UF) Día 5', 'BCI Dia5', 'BCI (UF)')),
+        bciDia15:         parseNumUF(g('BCI (UF) Dia 15', 'BCI (UF) Día 15', 'BCI Dia15')),
+        vfsVolvo:         parseNumUF(g('VFS VOLVO (UF)', 'VFS VOLVO', 'VFS (UF)')),
+        bancoChile:       parseNumUF(g('BANCO DE CHILE (UF)', 'BANCO DE CHILE', 'Banco Chile (UF)')),
+        contratosActivos: parseNum(g('Contratos Activos')) || 0,
+        vesteEstesMes:    (r['Vence este mes'] || '').trim(),
+        delta:            parseNumCLP(g('Delta vs mes anterior', 'Delta')),
+      };
+    });
 
   return {
     bancos,
