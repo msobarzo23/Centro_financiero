@@ -354,10 +354,12 @@ export async function fetchAllData() {
 
   // Cuotas pendientes = las que vencen hoy o después
   const creditoPendiente = credito.filter(c => c.fechaVenc >= hoyCredito);
-  // Saldo insoluto actual = primera cuota pendiente (o última si todas pagadas)
-  const saldoInsolutoActual = creditoPendiente.length > 0
-    ? creditoPendiente[0].saldoInsoluto
-    : credito.length > 0 ? credito[credito.length - 1].saldoInsoluto : 0;
+  // Total a pagar = suma de valorCuota de todas las cuotas pendientes con pago real
+  // Esto es el flujo real de caja: capital + intereses futuros (lo que efectivamente sale del banco)
+  // El IVA del leasing se recupera, pero el crédito no tiene IVA → ambos comparables s/IVA
+  const saldoInsolutoActual = creditoPendiente
+    .filter(c => c.valorCuota > 0)
+    .reduce((s, c) => s + c.valorCuota, 0);
 
   return {
     bancos,
