@@ -33,7 +33,7 @@ const fd=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{day:"2-digit
 const fdf=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"2-digit",month:"short"}):"";
 const fUF=(n)=>n?n.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
 
-const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Leasing","Crédito","Calculadora"];
+const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Leasing","Crédito","Alertas","Calculadora"];
 
 function Metric({label,value,sub,color,C}){
   return(<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:130}}>
@@ -76,7 +76,112 @@ function colorBanco(banco,C){
 }
 
 // ─── TAB RESUMEN ─────────────────────────────────────────────────────────────
-function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,creditoPendiente,saldoInsoluto}){
+
+// ─── MOTOR DE ALERTAS ────────────────────────────────────────────────────────
+// Tipos: "urgente" (rojo), "atencion" (ámbar), "info" (azul)
+// Retorna array de { tipo, icono, titulo, mensaje, fecha }
+function buildAlertas({dap,cal,leasingDetalle,creditoPendiente},hoy){
+  const alertas=[];
+  const diasHasta=(fecha)=>Math.ceil((new Date(fecha+"T12:00:00")-new Date(hoy+"T12:00:00"))/864e5);
+
+  // ── DAP próximos a vencer (7 días) ─────────────────────────────────────
+  const dapsV=dap.filter(d=>(d.vigente==="si"||d.vigente==="sí")&&d.vencimiento);
+  dapsV.forEach(d=>{
+    const dias=diasHasta(d.vencimiento);
+    if(dias>=0&&dias<=7){
+      const monto=d.montoInicial>=1e9?`$${(d.montoInicial/1e9).toFixed(1)}MM`
+                 :d.montoInicial>=1e6?`$${Math.round(d.montoInicial/1e6)}M`
+                 :`$${Math.round(d.montoInicial).toLocaleString("es-CL")}`;
+      const label=d.comentario||`DAP ${d.banco}`;
+      const tipo=dias<=2?"urgente":dias<=5?"atencion":"info";
+      alertas.push({
+        tipo,
+        icono:"💰",
+        titulo:`DAP vence ${dias===0?"hoy":dias===1?"mañana":`en ${dias}d`}`,
+        mensaje:`${label} · ${monto} · ${d.banco}`,
+        fecha:d.vencimiento,
+        dias,
+      });
+    }
+  });
+
+  // ── Cuotas leasing próximas (7 días) ───────────────────────────────────
+  // Agrupar por diaVto: construir fecha del próximo vencimiento
+  const gruposLeasing={};
+  leasingDetalle.forEach(d=>{
+    const k=d.diaVto;
+    if(!gruposLeasing[k])gruposLeasing[k]={diaVto:k,cuotaCIVA:0,bancos:new Set()};
+    gruposLeasing[k].cuotaCIVA+=d.cuotaCLPcIVA;
+    gruposLeasing[k].bancos.add(d.banco);
+  });
+  Object.values(gruposLeasing).forEach(g=>{
+    // Calcular próxima fecha de vencimiento para este día del mes
+    const hoyD=new Date(hoy+"T12:00:00");
+    let fechaVto=new Date(hoyD.getFullYear(),hoyD.getMonth(),g.diaVto,12,0,0);
+    if(fechaVto<hoyD) fechaVto=new Date(hoyD.getFullYear(),hoyD.getMonth()+1,g.diaVto,12,0,0);
+    const yyyy=fechaVto.getFullYear();
+    const mm=String(fechaVto.getMonth()+1).padStart(2,"0");
+    const dd2=String(fechaVto.getDate()).padStart(2,"0");
+    const fechaStr=`${yyyy}-${mm}-${dd2}`;
+    const dias=diasHasta(fechaStr);
+    if(dias>=0&&dias<=7){
+      const monto=g.cuotaCIVA>=1e6?`$${Math.round(g.cuotaCIVA/1e6)}M`:`$${Math.round(g.cuotaCIVA).toLocaleString("es-CL")}`;
+      const bancos=[...g.bancos].join(", ");
+      const tipo=dias<=2?"urgente":dias<=5?"atencion":"info";
+      alertas.push({
+        tipo,
+        icono:"🚛",
+        titulo:`Cuota leasing día ${g.diaVto} · ${dias===0?"hoy":dias===1?"mañana":`en ${dias}d`}`,
+        mensaje:`${monto} c/IVA · ${bancos}`,
+        fecha:fechaStr,
+        dias,
+      });
+    }
+  });
+
+  // ── Cuota crédito próxima (7 días) ─────────────────────────────────────
+  const proxCred=creditoPendiente.find(c=>c.valorCuota>0);
+  if(proxCred){
+    const dias=diasHasta(proxCred.fechaVenc);
+    if(dias>=0&&dias<=7){
+      const monto=proxCred.valorCuota>=1e6?`$${Math.round(proxCred.valorCuota/1e6)}M`:`$${Math.round(proxCred.valorCuota).toLocaleString("es-CL")}`;
+      const tipo=dias<=2?"urgente":dias<=5?"atencion":"info";
+      alertas.push({
+        tipo,
+        icono:"🏦",
+        titulo:`Cuota crédito N°${proxCred.nCuota} · ${dias===0?"hoy":dias===1?"mañana":`en ${dias}d`}`,
+        mensaje:`${monto} · Capital: $${Math.round(proxCred.amortizacion/1e6)}M · Interés: $${Math.round(proxCred.interes/1e6)}M`,
+        fecha:proxCred.fechaVenc,
+        dias,
+      });
+    }
+  }
+
+  // ── Compromisos calendario sin fondos en 7 días ───────────────────────
+  const finVentana=new Date(hoy+"T12:00:00");
+  finVentana.setDate(finVentana.getDate()+7);
+  const finVentanaStr=`${finVentana.getFullYear()}-${String(finVentana.getMonth()+1).padStart(2,"0")}-${String(finVentana.getDate()).padStart(2,"0")}`;
+  cal.filter(c=>c.fecha>=hoy&&c.fecha<=finVentanaStr&&c.falta>0).forEach(c=>{
+    const dias=diasHasta(c.fecha);
+    const faltaStr=c.falta>=1e6?`$${Math.round(c.falta/1e6)}M`:`$${Math.round(c.falta).toLocaleString("es-CL")}`;
+    const tipo=dias<=2?"urgente":"atencion";
+    alertas.push({
+      tipo,
+      icono:"📅",
+      titulo:`Compromiso sin fondos · ${dias===0?"hoy":dias===1?"mañana":`en ${dias}d`}`,
+      mensaje:`${c.concepto} · Falta ${faltaStr}`,
+      fecha:c.fecha,
+      dias,
+    });
+  });
+
+  // Ordenar: urgentes primero, luego por días
+  const orden={urgente:0,atencion:1,info:2};
+  alertas.sort((a,b)=>orden[a.tipo]-orden[b.tipo]||a.dias-b.dias);
+  return alertas;
+}
+
+function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,creditoPendiente,saldoInsoluto,alertas}){
   const hoy=getToday();
   const bancosHoy=bancos.filter(b=>b.fecha===hoy);
   const saldosIni=bancosHoy.filter(b=>b.descripcion==="Saldo Inicial");
@@ -130,13 +235,29 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,credito
   const noData=bancosHoy.length===0;
   const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
 
+  const colorAlerta=(tipo,C)=>tipo==="urgente"?{bg:C.redD,border:C.red+"55",text:C.red}:tipo==="atencion"?{bg:C.amberD,border:C.amber+"55",text:C.amberT}:{bg:C.accentD,border:C.accent+"55",text:C.accent};
+
   return(<div>
-    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"8px 12px",borderRadius:8,background:noData?C.amberD:semCubierta?C.greenD:C.amberD,border:`0.5px solid ${noData?C.amber+"44":semCubierta?C.green+"44":C.amber+"44"}`}}>
+    {/* Banner estado semana */}
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:alertas.length>0?8:14,padding:"8px 12px",borderRadius:8,background:noData?C.amberD:semCubierta?C.greenD:C.amberD,border:`0.5px solid ${noData?C.amber+"44":semCubierta?C.green+"44":C.amber+"44"}`}}>
       <span style={{fontSize:14}}>{noData?"○":semCubierta?"●":"◐"}</span>
       <span style={{fontSize:13,color:noData?C.amberT:semCubierta?C.greenT:C.amberT,fontWeight:500}}>
         {noData?"Sin movimientos bancarios hoy — ingresa los saldos en la hoja Bancos":semCubierta?"Semana cubierta — compromisos al día":`Faltan ${f(faltaSem)} para cubrir la semana`}
       </span>
     </div>
+    {/* Banner alertas activas */}
+    {alertas.length>0&&<div style={{marginBottom:14,display:"flex",flexDirection:"column",gap:4}}>
+      {alertas.slice(0,3).map((a,i)=>{const col=colorAlerta(a.tipo,C);return(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:col.bg,border:`0.5px solid ${col.border}`}}>
+          <span style={{fontSize:13}}>{a.icono}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <span style={{fontSize:12,fontWeight:600,color:col.text,marginRight:8}}>{a.titulo.toUpperCase()}</span>
+            <span style={{fontSize:12,color:C.tm}}>{a.mensaje}</span>
+          </div>
+        </div>
+      );})}
+      {alertas.length>3&&<div style={{fontSize:11,color:C.td,paddingLeft:12}}>+{alertas.length-3} alertas más — ver pestaña Alertas</div>}
+    </div>}
 
     {/* ── Métricas principales ── */}
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
@@ -622,6 +743,74 @@ function TabCredito({C,credito,creditoPendiente,saldoInsoluto}){
   </div>);
 }
 
+
+// ─── TAB ALERTAS ─────────────────────────────────────────────────────────────
+function TabAlertas({C,alertas}){
+  const colorConfig=(tipo,C)=>{
+    if(tipo==="urgente") return{bg:C.redD,border:C.red+"55",badgeBg:C.red,badgeText:"#fff",label:"URGENTE",labelColor:C.red};
+    if(tipo==="atencion") return{bg:C.amberD,border:C.amber+"55",badgeBg:C.amber,badgeText:"#000",label:"ATENCIÓN",labelColor:C.amberT};
+    return{bg:C.accentD,border:C.accent+"55",badgeBg:C.accent,badgeText:"#fff",label:"INFO",labelColor:C.accent};
+  };
+
+  const urgentes=alertas.filter(a=>a.tipo==="urgente");
+  const atenciones=alertas.filter(a=>a.tipo==="atencion");
+  const infos=alertas.filter(a=>a.tipo==="info");
+
+  if(alertas.length===0) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:12}}>
+      <div style={{fontSize:32}}>✅</div>
+      <div style={{fontSize:15,fontWeight:600,color:C.text}}>Sin alertas activas</div>
+      <div style={{fontSize:13,color:C.td}}>Todos los vencimientos están bajo control esta semana</div>
+    </div>
+  );
+
+  return(<div>
+    {/* Resumen de contadores */}
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+      {urgentes.length>0&&<div style={{padding:"10px 16px",borderRadius:8,background:C.redD,border:`0.5px solid ${C.red+"55"}`,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:18,fontWeight:700,color:C.red}}>{urgentes.length}</span>
+        <span style={{fontSize:12,color:C.red,fontWeight:600,textTransform:"uppercase"}}>Urgente{urgentes.length!==1?"s":""}</span>
+      </div>}
+      {atenciones.length>0&&<div style={{padding:"10px 16px",borderRadius:8,background:C.amberD,border:`0.5px solid ${C.amber+"55"}`,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:18,fontWeight:700,color:C.amberT}}>{atenciones.length}</span>
+        <span style={{fontSize:12,color:C.amberT,fontWeight:600,textTransform:"uppercase"}}>Atención{atenciones.length!==1?"":"es"}</span>
+      </div>}
+      {infos.length>0&&<div style={{padding:"10px 16px",borderRadius:8,background:C.accentD,border:`0.5px solid ${C.accent+"55"}`,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:18,fontWeight:700,color:C.accent}}>{infos.length}</span>
+        <span style={{fontSize:12,color:C.accent,fontWeight:600,textTransform:"uppercase"}}>Info{infos.length!==1?"s":""}</span>
+      </div>}
+    </div>
+
+    {/* Lista de alertas */}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {alertas.map((a,i)=>{
+        const col=colorConfig(a.tipo,C);
+        return(
+          <div key={i} style={{background:col.bg,border:`0.5px solid ${col.border}`,borderRadius:10,padding:"14px 16px",display:"flex",gap:14,alignItems:"flex-start"}}>
+            <div style={{width:36,height:36,borderRadius:8,background:col.badgeBg+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>
+              {a.icono}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,background:col.badgeBg,color:col.badgeText,letterSpacing:"0.5px"}}>{col.label}</span>
+                <span style={{fontSize:13,fontWeight:600,color:C.text}}>{a.titulo}</span>
+              </div>
+              <div style={{fontSize:13,color:C.tm}}>{a.mensaje}</div>
+              {a.fecha&&<div style={{fontSize:11,color:C.td,marginTop:4}}>
+                {new Date(a.fecha+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+              </div>}
+            </div>
+            <div style={{flexShrink:0,textAlign:"right"}}>
+              <div style={{fontSize:22,fontWeight:700,color:col.labelColor,lineHeight:1}}>{a.dias}</div>
+              <div style={{fontSize:10,color:C.td}}>días</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>);
+}
+
 // ─── CALCULADORA ──────────────────────────────────────────────────────────────
 function TabCalc({C}){
   const [lines,setLines]=useState([""]);
@@ -726,20 +915,21 @@ export default function App(){
         </div>
       </div>
       <div style={{display:"flex",gap:0,padding:"0 20px",borderBottom:`0.5px solid ${C.border}`,overflowX:"auto"}}>
-        {TABS.map((t,i)=>(<button key={t} onClick={()=>setTab(i)} style={{padding:"12px 16px",fontSize:13,fontWeight:tab===i?600:400,color:tab===i?C.accent:C.tm,background:"none",border:"none",borderBottom:tab===i?`2px solid ${C.accent}`:"2px solid transparent",cursor:"pointer",whiteSpace:"nowrap"}}>{t}</button>))}
+        {TABS.map((t,i)=>{const esAlertas=t==="Alertas";const nAlertas=esAlertas&&data?buildAlertas({dap:data.dap,cal:data.calendario,leasingDetalle:data.leasingDetalle,creditoPendiente:data.creditoPendiente},new Date().toLocaleDateString("en-CA")).length:0;return(<button key={t} onClick={()=>setTab(i)} style={{padding:"12px 16px",fontSize:13,fontWeight:tab===i?600:400,color:tab===i?C.accent:C.tm,background:"none",border:"none",borderBottom:tab===i?`2px solid ${C.accent}`:"2px solid transparent",cursor:"pointer",whiteSpace:"nowrap",position:"relative"}}>{t}{esAlertas&&nAlertas>0&&<span style={{position:"absolute",top:8,right:2,background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 5px",lineHeight:1.4}}>{nAlertas}</span>}</button>);})}
       </div>
       <div style={{padding:"16px 20px",maxWidth:960,margin:"0 auto"}}>
         {error&&<div style={{padding:12,borderRadius:8,background:C.redD,color:C.red,fontSize:13,marginBottom:12}}>Error cargando datos: {error}</div>}
         {loading?<Loading C={C}/>:data?(
           <>
-            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen} creditoPendiente={data.creditoPendiente} saldoInsoluto={data.saldoInsolutoActual}/>}
+            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen} creditoPendiente={data.creditoPendiente} saldoInsoluto={data.saldoInsolutoActual} alertas={buildAlertas({dap:data.dap,cal:data.calendario,leasingDetalle:data.leasingDetalle,creditoPendiente:data.creditoPendiente},new Date().toLocaleDateString("en-CA"))}/>}
             {tab===1&&<TabBancos C={C} bancos={data.bancos}/>}
             {tab===2&&<TabCalendario C={C} cal={data.calendario}/>}
             {tab===3&&<TabInversiones C={C} dap={data.dap}/>}
             {tab===4&&<TabFFMM C={C} ffmm={data.ffmmSaldos} movimientos={data.ffmmMovimientos}/>}
             {tab===5&&<TabLeasing C={C} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen}/>}
             {tab===6&&<TabCredito C={C} credito={data.credito} creditoPendiente={data.creditoPendiente} saldoInsoluto={data.saldoInsolutoActual}/>}
-            {tab===7&&<TabCalc C={C}/>}
+            {tab===7&&<TabAlertas C={C} alertas={buildAlertas({dap:data.dap,cal:data.calendario,leasingDetalle:data.leasingDetalle,creditoPendiente:data.creditoPendiente},new Date().toLocaleDateString("en-CA"))}/>}
+            {tab===8&&<TabCalc C={C}/>}
           </>
         ):<div style={{padding:40,textAlign:"center",color:C.td}}>No se pudieron cargar los datos</div>}
       </div>
