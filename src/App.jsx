@@ -33,7 +33,7 @@ const fd=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{day:"2-digit
 const fdf=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"2-digit",month:"short"}):"";
 const fUF=(n)=>n?n.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
 
-const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Leasing","Calculadora"];
+const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Leasing","Crédito","Calculadora"];
 
 function Metric({label,value,sub,color,C}){
   return(<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:130}}>
@@ -76,7 +76,7 @@ function colorBanco(banco,C){
 }
 
 // ─── TAB RESUMEN ─────────────────────────────────────────────────────────────
-function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
+function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,creditoPendiente,saldoInsoluto}){
   const hoy=getToday();
   const bancosHoy=bancos.filter(b=>b.fecha===hoy);
   const saldosIni=bancosHoy.filter(b=>b.descripcion==="Saldo Inicial");
@@ -119,6 +119,12 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
   const cuotaDia5 =leasingDetalle.filter(d=>d.diaVto===5 ||d.diaVto===4 ).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
   const cuotaDia15=leasingDetalle.filter(d=>d.diaVto===15||d.diaVto===14).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
   const cuotaTotalLeasing=leasingDetalle.reduce((s,d)=>s+d.cuotaCLPcIVA,0);
+  // Deuda leasing s/IVA en CLP = suma de cuotaCLPsIVA * cuotasPorPagar por contrato
+  const deudaLeasingSIVACLP=leasingDetalle.reduce((s,d)=>s+(d.cuotaCLPsIVA*d.cuotasPorPagar),0);
+
+  // Crédito comercial
+  const cuotasCreditoPend=creditoPendiente.length;
+  const proximaCuotaCredito=creditoPendiente.length>0?creditoPendiente[0]:null;
 
   const noData=bancosHoy.length===0;
   const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
@@ -139,23 +145,44 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
       <Metric C={C} label={`${mesLabel} cubierto`} value={`${Math.round(pctMes*100)}%`} sub={`${f(guarMes)} de ${f(compMes)}`} color={pctMes>=.9?C.green:C.amber}/>
     </div>
 
-    {/* ── Métricas Leasing ── */}
-    {nContratosLeasing>0&&<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,marginBottom:14}}>
-      <div style={{fontSize:11,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Leasing tractos · {nContratosLeasing} contratos · {fUF(totalDeudaLeasingUF)} UF</div>
-      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        {cuotaDia5>0&&<div style={{flex:1,minWidth:120}}>
-          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 5 cada mes</div>
-          <div style={{fontSize:18,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia5)}</div>
-        </div>}
-        {cuotaDia15>0&&<div style={{flex:1,minWidth:120}}>
-          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 15 cada mes</div>
-          <div style={{fontSize:18,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia15)}</div>
-        </div>}
-        <div style={{flex:1,minWidth:120,borderLeft:cuotaDia5>0||cuotaDia15>0?`0.5px solid ${C.border}`:"none",paddingLeft:cuotaDia5>0||cuotaDia15>0?12:0}}>
-          <div style={{fontSize:11,color:C.td,marginBottom:2}}>Total mensual c/IVA</div>
-          <div style={{fontSize:18,fontWeight:700,color:C.amber,fontFamily:"monospace"}}>{f(cuotaTotalLeasing)}</div>
+    {/* ── Leasing + Crédito + Deuda total ── */}
+    {nContratosLeasing>0&&<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+
+      {/* Cuadro leasing */}
+      <div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:2,minWidth:260}}>
+        <div style={{fontSize:11,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Leasing · {nContratosLeasing} contratos · {fUF(totalDeudaLeasingUF)} UF</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {cuotaDia5>0&&<div style={{flex:1,minWidth:100}}>
+            <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 5 c/mes</div>
+            <div style={{fontSize:16,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia5)}</div>
+          </div>}
+          {cuotaDia15>0&&<div style={{flex:1,minWidth:100}}>
+            <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 15 c/mes</div>
+            <div style={{fontSize:16,fontWeight:600,color:C.teal,fontFamily:"monospace"}}>{f(cuotaDia15)}</div>
+          </div>}
+          <div style={{flex:1,minWidth:100,borderLeft:`0.5px solid ${C.border}`,paddingLeft:10}}>
+            <div style={{fontSize:11,color:C.td,marginBottom:2}}>Total c/IVA</div>
+            <div style={{fontSize:16,fontWeight:700,color:C.amber,fontFamily:"monospace"}}>{f(cuotaTotalLeasing)}</div>
+          </div>
         </div>
       </div>
+
+      {/* Cuadro crédito */}
+      {saldoInsoluto>0&&<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:160}}>
+        <div style={{fontSize:11,color:C.tm,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Crédito comercial</div>
+        <div style={{fontSize:20,fontWeight:700,color:C.red,fontFamily:"monospace"}}>{f(saldoInsoluto)}</div>
+        <div style={{fontSize:11,color:C.td,marginTop:4}}>{cuotasCreditoPend} cuotas pendientes</div>
+        {proximaCuotaCredito&&<div style={{fontSize:11,color:C.td}}>Próxima: {fd(proximaCuotaCredito.fechaVenc)} · {f(proximaCuotaCredito.valorCuota)}</div>}
+      </div>}
+
+      {/* Cuadro deuda total neta */}
+      {(deudaLeasingSIVACLP>0||saldoInsoluto>0)&&<div style={{background:C.surfaceAlt,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.borderL}`,flex:1,minWidth:160}}>
+        <div style={{fontSize:11,color:C.tm,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Deuda total neta</div>
+        <div style={{fontSize:20,fontWeight:700,color:C.red,fontFamily:"monospace"}}>{f(deudaLeasingSIVACLP+saldoInsoluto)}</div>
+        <div style={{fontSize:10,color:C.td,marginTop:4}}>Leasing s/IVA: {f(deudaLeasingSIVACLP)}</div>
+        <div style={{fontSize:10,color:C.td}}>Crédito: {f(saldoInsoluto)}</div>
+      </div>}
+
     </div>}
 
     {/* ── Consolidado inversiones ── */}
@@ -516,6 +543,84 @@ function TabLeasing({C,leasingDetalle,leasingResumen}){
   </div>);
 }
 
+
+// ─── TAB CRÉDITO (NUEVO) ──────────────────────────────────────────────────────
+function TabCredito({C,credito,creditoPendiente,saldoInsoluto}){
+  const hoy=getToday();
+  const totalCuotas=credito.length;
+  const pagadas=credito.filter(c=>c.fechaVenc<hoy).length;
+  const totalIntereses=credito.reduce((s,c)=>s+c.interes,0);
+  const interesesPend=creditoPendiente.reduce((s,c)=>s+c.interes,0);
+  const cuotaMensual=creditoPendiente.length>0?creditoPendiente[0].valorCuota:0;
+  const proxima=creditoPendiente[0]||null;
+  const segunda=creditoPendiente[1]||null;
+
+  return(<div>
+    {/* ── Métricas ── */}
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+      <Metric C={C} label="Saldo insoluto" value={f(saldoInsoluto)} sub="Capital pendiente" color={C.red}/>
+      <Metric C={C} label="Cuotas pendientes" value={creditoPendiente.length} sub={`de ${totalCuotas} totales · pagadas: ${pagadas}`} color={C.amber}/>
+      <Metric C={C} label="Cuota mensual" value={f(cuotaMensual)} sub="Capital + interés" color={C.text}/>
+      <Metric C={C} label="Intereses pendientes" value={f(interesesPend)} sub={`Total histórico: ${f(totalIntereses)}`} color={C.td}/>
+    </div>
+
+    {/* ── Próximas cuotas ── */}
+    {(proxima||segunda)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+      {[proxima,segunda].filter(Boolean).map((c,i)=>{
+        const dias=c.fechaVenc>=hoy?Math.ceil((new Date(c.fechaVenc)-new Date(hoy))/864e5):0;
+        const esUrgente=dias<=5&&dias>=0;
+        return(
+          <div key={i} style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${esUrgente?C.amber+"66":C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:12,fontWeight:600,color:C.text}}>Cuota {c.nCuota}</span>
+              {esUrgente&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:4,background:C.amberD,color:C.amberT,fontWeight:600}}>EN {dias}d</span>}
+            </div>
+            <div style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:esUrgente?C.amberT:C.text,marginBottom:6}}>{f(c.valorCuota)}</div>
+            <div style={{fontSize:11,color:C.td}}>Vence: {fdf(c.fechaVenc)}</div>
+            <div style={{display:"flex",gap:16,marginTop:8}}>
+              <div><div style={{fontSize:10,color:C.td}}>Capital</div><div style={{fontSize:12,fontFamily:"monospace",color:C.text}}>{f(c.amortizacion)}</div></div>
+              <div><div style={{fontSize:10,color:C.td}}>Interés</div><div style={{fontSize:12,fontFamily:"monospace",color:C.amber}}>{f(c.interes)}</div></div>
+              <div><div style={{fontSize:10,color:C.td}}>Saldo tras pago</div><div style={{fontSize:12,fontFamily:"monospace",color:C.td}}>{f(c.saldoInsoluto)}</div></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>}
+
+    {/* ── Tabla completa ── */}
+    <div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${C.borderL}`,fontSize:12,color:C.tm,textTransform:"uppercase"}}>
+        Tabla de amortización · {totalCuotas} cuotas
+      </div>
+      <div style={{overflowX:"auto",maxHeight:480,overflowY:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead style={{position:"sticky",top:0,background:C.surface,zIndex:1}}>
+            <tr>{["N°","Vencimiento","Capital","Interés","Cuota","Saldo Insoluto"].map(h=>(
+              <th key={h} style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:C.td,fontWeight:500,textTransform:"uppercase",whiteSpace:"nowrap",borderBottom:`0.5px solid ${C.borderL}`}}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {credito.map((c,i)=>{
+              const pasada=c.fechaVenc<hoy;
+              const esHoy=c.fechaVenc===hoy;
+              return(
+                <tr key={i} style={{borderTop:`0.5px solid ${C.border}`,opacity:pasada?0.45:1,background:esHoy?C.amberD:"transparent"}}>
+                  <td style={{padding:"7px 12px",color:C.tm,fontWeight:500}}>{c.nCuota}</td>
+                  <td style={{padding:"7px 12px",color:pasada?C.td:C.text,whiteSpace:"nowrap"}}>{fdf(c.fechaVenc)}</td>
+                  <td style={{padding:"7px 12px",fontFamily:"monospace",color:C.text}}>{c.amortizacion>0?f(c.amortizacion):"—"}</td>
+                  <td style={{padding:"7px 12px",fontFamily:"monospace",color:C.amber}}>{c.interes>0?f(c.interes):"—"}</td>
+                  <td style={{padding:"7px 12px",fontFamily:"monospace",fontWeight:600,color:pasada?C.td:C.text}}>{c.valorCuota>0?f(c.valorCuota):"—"}</td>
+                  <td style={{padding:"7px 12px",fontFamily:"monospace",color:C.teal}}>{f(c.saldoInsoluto)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>);
+}
+
 // ─── CALCULADORA ──────────────────────────────────────────────────────────────
 function TabCalc({C}){
   const [lines,setLines]=useState([""]);
@@ -626,13 +731,14 @@ export default function App(){
         {error&&<div style={{padding:12,borderRadius:8,background:C.redD,color:C.red,fontSize:13,marginBottom:12}}>Error cargando datos: {error}</div>}
         {loading?<Loading C={C}/>:data?(
           <>
-            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen}/>}
+            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen} creditoPendiente={data.creditoPendiente} saldoInsoluto={data.saldoInsolutoActual}/>}
             {tab===1&&<TabBancos C={C} bancos={data.bancos}/>}
             {tab===2&&<TabCalendario C={C} cal={data.calendario}/>}
             {tab===3&&<TabInversiones C={C} dap={data.dap}/>}
             {tab===4&&<TabFFMM C={C} ffmm={data.ffmmSaldos} movimientos={data.ffmmMovimientos}/>}
             {tab===5&&<TabLeasing C={C} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen}/>}
-            {tab===6&&<TabCalc C={C}/>}
+            {tab===6&&<TabCredito C={C} credito={data.credito} creditoPendiente={data.creditoPendiente} saldoInsoluto={data.saldoInsolutoActual}/>}
+            {tab===7&&<TabCalc C={C}/>}
           </>
         ):<div style={{padding:40,textAlign:"center",color:C.td}}>No se pudieron cargar los datos</div>}
       </div>
