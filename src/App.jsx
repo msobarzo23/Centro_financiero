@@ -97,7 +97,6 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
   const faltaSem=semComps.reduce((s,c)=>s+c.falta,0);
 
   const proxComp=cal.filter(c=>c.fecha>=hoy).slice(0,5);
-  // DAPs: solo mostrar los que vencen DESPUÉS de hoy (mañana en adelante)
   const proxDAP=dapsV.filter(d=>d.vencimiento>hoy).sort((a,b)=>a.vencimiento.localeCompare(b.vencimiento)).slice(0,5);
 
   const noData=bancosHoy.length===0;
@@ -301,22 +300,67 @@ function TabFFMM({C,ffmm,movimientos}){
   </div>);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CALCULATOR — supports +, -, *, / and M/MM suffixes
+// ═══════════════════════════════════════════════════════════════
 function TabCalc({C}){
   const [lines,setLines]=useState([""]);
   const [history,setHistory]=useState([]);
-  const parse=(s)=>{const c=s.replace(/\$/g,"").replace(/\./g,"").replace(/,/g,".").replace(/\s/g,"").toUpperCase();const mm=c.match(/^([+-]?\d+(?:\.\d+)?)MM$/);if(mm)return parseFloat(mm[1])*1e9;const m=c.match(/^([+-]?\d+(?:\.\d+)?)M$/);if(m)return parseFloat(m[1])*1e6;const n=parseFloat(c);return isNaN(n)?null:n;};
-  const vals=lines.map(l=>{const t=l.trim();if(!t)return null;if(t.startsWith("-")){const v=parse(t.substring(1));return v!==null?-v:null;}if(t.startsWith("+")){return parse(t.substring(1));}return parse(t);});
+
+  // Parse a single token (number with optional M/MM suffix)
+  const parseToken=(s)=>{
+    const c=s.replace(/\$/g,"").replace(/\./g,"").replace(/,/g,".").replace(/\s/g,"").toUpperCase();
+    const mm=c.match(/^(\d+(?:\.\d+)?)MM$/);
+    if(mm)return parseFloat(mm[1])*1e9;
+    const m=c.match(/^(\d+(?:\.\d+)?)M$/);
+    if(m)return parseFloat(m[1])*1e6;
+    const n=parseFloat(c);
+    return isNaN(n)?null:n;
+  };
+
+  // Evaluate a full expression: supports +, -, *, / with M/MM tokens
+  const evalExpr=(input)=>{
+    if(!input||!input.trim())return null;
+    let s=input.replace(/\$/g,"").replace(/\s/g,"").toUpperCase();
+    // Replace tokens with M/MM suffix by their numeric value
+    // Match numbers (with dots/commas) followed by optional MM or M
+    s=s.replace(/(\d[\d.,]*)(MM|M)?/gi,(_match,num,suffix)=>{
+      const clean=num.replace(/\./g,"").replace(/,/g,".");
+      const n=parseFloat(clean);
+      if(isNaN(n))return "NaN";
+      if(suffix){
+        const su=suffix.toUpperCase();
+        if(su==="MM")return String(n*1e9);
+        if(su==="M")return String(n*1e6);
+      }
+      return String(n);
+    });
+    // Now s should be a pure math expression with +, -, *, /
+    // Validate: only allow digits, dots, +, -, *, /, (, ), spaces
+    if(!/^[0-9.+\-*/() eE]+$/.test(s))return null;
+    try{
+      // Use Function for safe eval of math expression
+      const result=new Function("return ("+s+")")();
+      if(typeof result==="number"&&isFinite(result))return result;
+      return null;
+    }catch(e){return null;}
+  };
+
+  const vals=lines.map(l=>evalExpr(l.trim()));
   const total=vals.reduce((s,v)=>s+(v||0),0);
   const has=vals.some(v=>v!==null);
-  const add=()=>setLines([...lines,""]);const upd=(i,v)=>{const n=[...lines];n[i]=v;setLines(n);};const rem=(i)=>{if(lines.length===1){setLines([""]);return;}setLines(lines.filter((_,x)=>x!==i));};
+  const add=()=>setLines([...lines,""]);
+  const upd=(i,v)=>{const n=[...lines];n[i]=v;setLines(n);};
+  const rem=(i)=>{if(lines.length===1){setLines([""]);return;}setLines(lines.filter((_,x)=>x!==i));};
   const clear=()=>{if(has)setHistory([{lines:lines.filter(l=>l.trim()),total,ts:new Date().toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"})},...history.slice(0,4)]);setLines([""]);};
+
   return(<div style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:14}}>
     <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`}}>
       <div style={{fontSize:12,color:C.tm,marginBottom:6,textTransform:"uppercase"}}>Calculadora rápida</div>
-      <div style={{fontSize:11,color:C.td,marginBottom:12}}>Escribe montos con + o - · "M" = millones · "MM" = miles de millones</div>
+      <div style={{fontSize:11,color:C.td,marginBottom:12}}>Soporta +, -, *, / entre valores · "M" = millones · "MM" = miles de millones · Ej: 500M+300M, 1.5MM*2, 800M-150M</div>
       {lines.map((l,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-        <input type="text" value={l} onChange={e=>upd(i,e.target.value)} onKeyDown={e=>{if(e.key==="Enter")add();}} placeholder={i===0?"Ej: 500M, -200M, +350M...":""} style={{flex:1,padding:"8px 12px",borderRadius:6,fontSize:15,background:C.surfaceAlt,color:C.text,border:`0.5px solid ${C.border}`,fontFamily:"monospace",outline:"none"}}/>
-        <span style={{fontSize:13,fontFamily:"monospace",color:vals[i]!=null?(vals[i]>=0?C.green:C.red):C.td,minWidth:80,textAlign:"right"}}>{vals[i]!=null?fS(vals[i]):""}</span>
+        <input type="text" value={l} onChange={e=>upd(i,e.target.value)} onKeyDown={e=>{if(e.key==="Enter")add();}} placeholder={i===0?"Ej: 500M+300M, 1.5MM*2, 800M/4":""}  style={{flex:1,padding:"8px 12px",borderRadius:6,fontSize:15,background:C.surfaceAlt,color:C.text,border:`0.5px solid ${C.border}`,fontFamily:"monospace",outline:"none"}}/>
+        <span style={{fontSize:13,fontFamily:"monospace",color:vals[i]!=null?(vals[i]>=0?C.green:C.red):C.td,minWidth:100,textAlign:"right"}}>{vals[i]!=null?fS(vals[i]):""}</span>
         {lines.length>1&&<button onClick={()=>rem(i)} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>}
       </div>))}
       <div style={{display:"flex",gap:8,marginTop:10}}>
@@ -333,7 +377,7 @@ function TabCalc({C}){
       {history.length===0?<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Aparecerá al limpiar</div>:history.map((h,i)=>(
         <div key={i} style={{padding:"8px 0",borderBottom:i<history.length-1?`0.5px solid ${C.border}`:"none"}}>
           <div style={{fontSize:10,color:C.td}}>{h.ts}</div>
-          <div style={{fontSize:12,color:C.tm}}>{h.lines.join(" + ")}</div>
+          <div style={{fontSize:12,color:C.tm}}>{h.lines.join(" | ")}</div>
           <div style={{fontSize:14,fontWeight:600,fontFamily:"monospace",color:h.total>=0?C.green:C.red}}>{f(h.total)}</div>
         </div>
       ))}
