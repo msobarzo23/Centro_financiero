@@ -11,6 +11,7 @@ const T = {
     amber:"#FFB74D",amberD:"rgba(255,183,77,0.12)",amberT:"#FFCC80",
     purple:"#AB47BC",purpleD:"rgba(171,71,188,0.12)",
     cyan:"#26C6DA",cyanD:"rgba(38,198,218,0.12)",
+    teal:"#26A69A",tealD:"rgba(38,166,154,0.12)",
   },
   light: {
     bg:"#F5F6F8",surface:"#FFFFFF",surfaceAlt:"#F0F1F4",border:"#E0E2E8",borderL:"#D0D3DA",
@@ -21,6 +22,7 @@ const T = {
     amber:"#E65100",amberD:"rgba(230,81,0,0.08)",amberT:"#E65100",
     purple:"#7B1FA2",purpleD:"rgba(123,31,162,0.08)",
     cyan:"#00838F",cyanD:"rgba(0,131,143,0.08)",
+    teal:"#00695C",tealD:"rgba(0,105,92,0.08)",
   },
 };
 
@@ -29,8 +31,9 @@ const fS=(n)=>{if(n==null)return"—";const a=Math.abs(n);if(a>=1e9)return`${(n/
 const dd=(a,b)=>Math.ceil((new Date(b)-new Date(a))/864e5);
 const fd=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit"}):"";
 const fdf=(d)=>d?new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"2-digit",month:"short"}):"";
+const fUF=(n)=>n?n.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
 
-const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Calculadora"];
+const TABS=["Resumen","Bancos","Calendario","Inversiones","Fondos Mutuos","Leasing","Calculadora"];
 
 function Metric({label,value,sub,color,C}){
   return(<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:130}}>
@@ -63,7 +66,17 @@ function colorTipo(t,C){
   return{bg:C.purpleD,color:C.purple};
 }
 
-function TabResumen({C,bancos,dap,cal,ffmm}){
+// ─── Banco color leasing ──────────────────────────────────────────────────────
+function colorBanco(banco,C){
+  const b=(banco||'').toUpperCase();
+  if(b.includes('BCI'))   return{bg:C.accentD,color:C.accent};
+  if(b.includes('VOLVO')||b.includes('VFS')) return{bg:C.amberD,color:C.amber};
+  if(b.includes('CHILE')) return{bg:C.tealD,color:C.teal};
+  return{bg:C.purpleD,color:C.purple};
+}
+
+// ─── TAB RESUMEN ─────────────────────────────────────────────────────────────
+function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen}){
   const hoy=getToday();
   const bancosHoy=bancos.filter(b=>b.fecha===hoy);
   const saldosIni=bancosHoy.filter(b=>b.descripcion==="Saldo Inicial");
@@ -99,6 +112,13 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
   const proxComp=cal.filter(c=>c.fecha>=hoy).slice(0,5);
   const proxDAP=dapsV.filter(d=>d.vencimiento>hoy).sort((a,b)=>a.vencimiento.localeCompare(b.vencimiento)).slice(0,5);
 
+  // ── Leasing en Resumen ───────────────────────────────────────────────────
+  const totalDeudaLeasingUF=leasingDetalle.reduce((s,d)=>s+d.deudaUF,0);
+  // Próximas 2 cuotas del Leasing_Resumen (proyección mensual)
+  const proxCuotasLeasing=leasingResumen.slice(0,2);
+  const cuotaMesActualLeasing=proxCuotasLeasing[0]?.cuotaCLPcIVA||0;
+  const nContratosLeasing=leasingDetalle.length;
+
   const noData=bancosHoy.length===0;
   const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
 
@@ -109,12 +129,23 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
         {noData?"Sin movimientos bancarios hoy — ingresa los saldos en la hoja Bancos":semCubierta?"Semana cubierta — compromisos al día":`Faltan ${f(faltaSem)} para cubrir la semana`}
       </span>
     </div>
+
+    {/* ── Métricas principales ── */}
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
       <Metric C={C} label="Saldo cuentas hoy" value={saldoAct>0?f(saldoAct):"Sin datos"} sub={totalIni>0?`Inicial: ${f(totalIni)}`:undefined}/>
       <Metric C={C} label="En DAP vigentes" value={f(totalDAP)} sub={`${trab.length} trabajo · ${inv.length} inversión · ${cred.length} crédito`} color={C.amber}/>
       <Metric C={C} label="Fondos mutuos" value={totalFFMMAct>0?f(totalFFMMAct):f(totalFFMMInv)} sub={totalGanFFMM>0?`Rent: +${fS(totalGanFFMM)}`:undefined} color={C.purple}/>
       <Metric C={C} label={`${mesLabel} cubierto`} value={`${Math.round(pctMes*100)}%`} sub={`${f(guarMes)} de ${f(compMes)}`} color={pctMes>=.9?C.green:C.amber}/>
     </div>
+
+    {/* ── Métricas Leasing ── */}
+    {(nContratosLeasing>0||cuotaMesActualLeasing>0)&&<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+      <Metric C={C} label="Deuda leasing total" value={`${fUF(totalDeudaLeasingUF)} UF`} sub={`${nContratosLeasing} contratos activos`} color={C.teal}/>
+      <Metric C={C} label="Cuota leasing este mes" value={f(cuotaMesActualLeasing)} sub={proxCuotasLeasing[0]?`${proxCuotasLeasing[0].mes} ${proxCuotasLeasing[0].anio}`:undefined} color={C.teal}/>
+      {proxCuotasLeasing[1]&&<Metric C={C} label="Cuota próximo mes" value={f(proxCuotasLeasing[1].cuotaCLPcIVA)} sub={`${proxCuotasLeasing[1].mes} ${proxCuotasLeasing[1].anio}`} color={C.td}/>}
+    </div>}
+
+    {/* ── Consolidado inversiones ── */}
     <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`,marginBottom:12}}>
       <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Consolidado inversiones</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",gap:"6px 16px",fontSize:13}}>
@@ -129,7 +160,9 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
       </div>
       <div style={{marginTop:8,fontSize:11,color:C.td}}>Ganancia histórica DAP: {f(ganHistorica)}</div>
     </div>
+
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* Próximos compromisos */}
       <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`}}>
         <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase"}}>Próximos compromisos</div>
         {proxComp.length===0?<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Sin compromisos próximos</div>:
@@ -140,6 +173,7 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
             <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:13,fontWeight:500,color:ok?C.green:C.text}}>{fS(c.monto)}</div>{!ok&&<div style={{fontSize:10,color:C.red}}>Falta {fS(c.falta)}</div>}</div>
           </div>);})}
       </div>
+      {/* DAPs próximos a vencer */}
       <div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`}}>
         <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase"}}>DAPs próximos a vencer</div>
         {proxDAP.length===0?<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Sin DAPs por vencer</div>:
@@ -151,6 +185,7 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
           </div>);})}
       </div>
     </div>
+
     {Object.keys(ultimo).length>0&&<div style={{marginTop:12,background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`}}>
       <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase"}}>Saldos por banco hoy</div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{Object.entries(ultimo).map(([b,s])=>{const ini=saldosIni.find(x=>x.banco===b)?.saldoInicial||0;const diff=s-ini;return(
@@ -160,6 +195,7 @@ function TabResumen({C,bancos,dap,cal,ffmm}){
   </div>);
 }
 
+// ─── TAB BANCOS ───────────────────────────────────────────────────────────────
 function TabBancos({C,bancos}){
   const fechas=[...new Set(bancos.map(b=>b.fecha))].sort().reverse();
   const [fechaSel,setFechaSel]=useState(fechas[0]||"");
@@ -192,6 +228,7 @@ function TabBancos({C,bancos}){
   </div>);
 }
 
+// ─── TAB CALENDARIO ───────────────────────────────────────────────────────────
 function TabCalendario({C,cal}){
   const hoy=getToday();
   const meses={};cal.forEach(c=>{if(!c.fecha)return;const m=c.fecha.substring(0,7);if(!meses[m])meses[m]=[];meses[m].push(c);});
@@ -218,6 +255,7 @@ function TabCalendario({C,cal}){
   })}</div>);
 }
 
+// ─── TAB INVERSIONES ─────────────────────────────────────────────────────────
 function TabInversiones({C,dap}){
   const hoy=getToday();
   const vigentes=dap.filter(d=>d.vigente==="si"||d.vigente==="sí");
@@ -256,6 +294,7 @@ function TabInversiones({C,dap}){
   </div>);
 }
 
+// ─── TAB FFMM ────────────────────────────────────────────────────────────────
 function TabFFMM({C,ffmm,movimientos}){
   const totalInv=ffmm.reduce((s,f)=>s+f.invertido,0);
   const totalAct=ffmm.reduce((s,f)=>s+f.valorActual,0);
@@ -300,14 +339,175 @@ function TabFFMM({C,ffmm,movimientos}){
   </div>);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CALCULATOR — supports +, -, *, / and M/MM suffixes
-// ═══════════════════════════════════════════════════════════════
+// ─── TAB LEASING (NUEVO) ──────────────────────────────────────────────────────
+function TabLeasing({C,leasingDetalle,leasingResumen}){
+  const hoy=getToday();
+
+  // ── Métricas resumen ──────────────────────────────────────────────────────
+  const totalDeudaUF=leasingDetalle.reduce((s,d)=>s+d.deudaUF,0);
+  const totalCuotaCLP=leasingDetalle.reduce((s,d)=>s+d.cuotaCLPcIVA,0);
+  const totalTractos=leasingDetalle.reduce((s,d)=>s+d.nTractos,0);
+  const totalCuotasPorPagar=leasingDetalle.reduce((s,d)=>s+d.cuotasPorPagar,0);
+
+  // Deuda por emisor
+  const porBanco={};
+  leasingDetalle.forEach(d=>{
+    const b=d.banco;
+    if(!porBanco[b])porBanco[b]={deudaUF:0,cuota:0,contratos:0};
+    porBanco[b].deudaUF+=d.deudaUF;
+    porBanco[b].cuota+=d.cuotaCLPcIVA;
+    porBanco[b].contratos+=1;
+  });
+
+  // Próximas cuotas con estado URGENTE
+  const proximas=leasingResumen.slice(0,3);
+
+  return(<div>
+    {/* ── Métricas superiores ── */}
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+      <Metric C={C} label="Deuda total (UF)" value={fUF(totalDeudaUF)} sub={`${leasingDetalle.length} contratos activos`} color={C.teal}/>
+      <Metric C={C} label="Tractos en leasing" value={totalTractos} sub="Unidades comprometidas" color={C.teal}/>
+      <Metric C={C} label="Cuota mensual total" value={f(totalCuotaCLP)} sub="Con IVA · todos los bancos" color={C.amber}/>
+      <Metric C={C} label="Cuotas por pagar" value={totalCuotasPorPagar} sub="Suma contratos activos" color={C.td}/>
+    </div>
+
+    {/* ── Próximas cuotas ── */}
+    {proximas.length>0&&<div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Próximas cuotas a pagar</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10}}>
+        {proximas.map((r,i)=>{
+          const bciTotal=(r.bciDia5||0)+(r.bciDia15||0);
+          // Determinar si hay urgencia (primer mes = más próximo)
+          const esUrgente=i===0;
+          return(
+            <div key={i} style={{padding:"12px 14px",borderRadius:8,background:esUrgente?C.amberD:C.surfaceAlt,border:`0.5px solid ${esUrgente?C.amber+"55":C.border}`}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <div style={{fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>{r.mes} {r.anio}</div>
+                {esUrgente&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:4,background:C.amber+"33",color:C.amberT,fontWeight:600}}>PRÓXIMA</span>}
+              </div>
+              <div style={{fontSize:20,fontWeight:700,color:esUrgente?C.amberT:C.text,fontFamily:"monospace",marginBottom:4}}>{f(r.cuotaCLPcIVA)}</div>
+              <div style={{fontSize:11,color:C.td}}>s/IVA: {f(r.cuotaCLPsIVA)}</div>
+              <div style={{marginTop:8,display:"flex",gap:6,flexWrap:"wrap"}}>
+                {bciTotal>0&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:C.accentD,color:C.accent}}>BCI {fUF(bciTotal)} UF</span>}
+                {r.vfsVolvo>0&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:C.amberD,color:C.amber}}>VFS {fUF(r.vfsVolvo)} UF</span>}
+                {r.bancoChile>0&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:C.tealD,color:C.teal}}>BancoChile {fUF(r.bancoChile)} UF</span>}
+              </div>
+              {r.contratosActivos>0&&<div style={{marginTop:6,fontSize:11,color:C.td}}>{r.contratosActivos} contratos activos</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>}
+
+    {/* ── Resumen por emisor ── */}
+    {Object.keys(porBanco).length>0&&<div style={{background:C.surface,borderRadius:10,padding:16,border:`0.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{fontSize:12,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Cartera por emisor</div>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${Object.keys(porBanco).length},1fr)`,gap:10}}>
+        {Object.entries(porBanco).map(([banco,data])=>{
+          const tc=colorBanco(banco,C);
+          return(
+            <div key={banco} style={{padding:"12px 14px",borderRadius:8,background:C.surfaceAlt}}>
+              <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,background:tc.bg,color:tc.color,marginBottom:8,display:"inline-block"}}>{banco}</span>
+              <div style={{fontSize:16,fontWeight:600,color:C.text,fontFamily:"monospace",marginTop:4}}>{fUF(data.deudaUF)} UF</div>
+              <div style={{fontSize:12,color:C.tm}}>{f(data.cuota)} / mes c/IVA</div>
+              <div style={{fontSize:11,color:C.td,marginTop:2}}>{data.contratos} contrato{data.contratos!==1?"s":""}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>}
+
+    {/* ── Tabla contratos activos ── */}
+    <div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden",marginBottom:14}}>
+      <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${C.borderL}`,fontSize:12,color:C.tm,textTransform:"uppercase"}}>
+        Contratos activos ({leasingDetalle.length})
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr>{["Banco","Tractos","Cuota c/IVA","Cuotas x Pagar","Vencimiento","Deuda UF"].map(h=>(
+              <th key={h} style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:C.td,fontWeight:500,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {leasingDetalle.length===0
+              ?<tr><td colSpan={6} style={{padding:20,textAlign:"center",color:C.td}}>Sin contratos activos</td></tr>
+              :leasingDetalle.map((d,i)=>{
+                const tc=colorBanco(d.banco,C);
+                // Alerta si vence pronto (fecha fin cercana)
+                const diasFin=d.fechaFin?dd(hoy,d.fechaFin):9999;
+                const venceProx=diasFin<=60&&diasFin>=0;
+                return(
+                  <tr key={i} style={{borderTop:`0.5px solid ${C.border}`,background:i%2===0?"transparent":C.surfaceAlt+"55"}}>
+                    <td style={{padding:"8px 12px"}}>
+                      <span style={{padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:500,background:tc.bg,color:tc.color}}>{d.banco}</span>
+                    </td>
+                    <td style={{padding:"8px 12px",color:C.text,fontWeight:500,textAlign:"center"}}>{d.nTractos}</td>
+                    <td style={{padding:"8px 12px",fontFamily:"monospace",color:C.text,fontWeight:600}}>{fS(d.cuotaCLPcIVA)}</td>
+                    <td style={{padding:"8px 12px",color:C.text,textAlign:"center"}}>{d.cuotasPorPagar}</td>
+                    <td style={{padding:"8px 12px",color:venceProx?C.amber:C.text,fontWeight:venceProx?600:400,whiteSpace:"nowrap"}}>
+                      {fd(d.fechaFin)}{venceProx?` (${diasFin}d)`:""}
+                    </td>
+                    <td style={{padding:"8px 12px",fontFamily:"monospace",color:C.teal,fontWeight:500}}>{fUF(d.deudaUF)}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+          {leasingDetalle.length>1&&<tfoot>
+            <tr style={{borderTop:`1px solid ${C.borderL}`,background:C.surfaceAlt}}>
+              <td style={{padding:"8px 12px",fontWeight:600,color:C.text,fontSize:11}}>TOTAL</td>
+              <td style={{padding:"8px 12px",fontWeight:600,color:C.text,textAlign:"center"}}>{totalTractos}</td>
+              <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700,color:C.amber}}>{fS(totalCuotaCLP)}</td>
+              <td style={{padding:"8px 12px",fontWeight:600,color:C.text,textAlign:"center"}}>{totalCuotasPorPagar}</td>
+              <td style={{padding:"8px 12px"}}></td>
+              <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700,color:C.teal}}>{fUF(totalDeudaUF)}</td>
+            </tr>
+          </tfoot>}
+        </table>
+      </div>
+    </div>
+
+    {/* ── Proyección mensual ── */}
+    {leasingResumen.length>0&&<div style={{background:C.surface,borderRadius:10,border:`0.5px solid ${C.border}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${C.borderL}`,fontSize:12,color:C.tm,textTransform:"uppercase"}}>
+        Proyección mensual de cuotas
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr>{["Mes","Cuota c/IVA","BCI","VFS Volvo","Banco Chile","Contratos","Vence"].map(h=>(
+              <th key={h} style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:C.td,fontWeight:500,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {leasingResumen.map((r,i)=>{
+              const bciTotal=(r.bciDia5||0)+(r.bciDia15||0);
+              const esActual=i===0;
+              return(
+                <tr key={i} style={{borderTop:`0.5px solid ${C.border}`,background:esActual?C.tealD:"transparent"}}>
+                  <td style={{padding:"8px 12px",fontWeight:esActual?600:400,color:C.text,whiteSpace:"nowrap",textTransform:"capitalize"}}>{r.mes} {r.anio}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:esActual?700:500,color:esActual?C.teal:C.text}}>{fS(r.cuotaCLPcIVA)}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:C.accent}}>{bciTotal>0?fUF(bciTotal):"—"}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:C.amber}}>{r.vfsVolvo>0?fUF(r.vfsVolvo):"—"}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:C.teal}}>{r.bancoChile>0?fUF(r.bancoChile):"—"}</td>
+                  <td style={{padding:"8px 12px",color:C.tm,textAlign:"center"}}>{r.contratosActivos||"—"}</td>
+                  <td style={{padding:"8px 12px",color:r.vesteEstesMes?C.amber:C.td,fontSize:11}}>{r.vesteEstesMes||"—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>}
+  </div>);
+}
+
+// ─── CALCULADORA ──────────────────────────────────────────────────────────────
 function TabCalc({C}){
   const [lines,setLines]=useState([""]);
   const [history,setHistory]=useState([]);
 
-  // Parse a single token (number with optional M/MM suffix)
   const parseToken=(s)=>{
     const c=s.replace(/\$/g,"").replace(/\./g,"").replace(/,/g,".").replace(/\s/g,"").toUpperCase();
     const mm=c.match(/^(\d+(?:\.\d+)?)MM$/);
@@ -318,32 +518,19 @@ function TabCalc({C}){
     return isNaN(n)?null:n;
   };
 
-  // Evaluate a full expression: supports +, -, *, / with M/MM tokens
   const evalExpr=(input)=>{
     if(!input||!input.trim())return null;
     let s=input.replace(/\$/g,"").replace(/\s/g,"").toUpperCase();
-    // Replace tokens with M/MM suffix by their numeric value
-    // Match numbers (with dots/commas) followed by optional MM or M
     s=s.replace(/(\d[\d.,]*)(MM|M)?/gi,(_match,num,suffix)=>{
       const clean=num.replace(/\./g,"").replace(/,/g,".");
       const n=parseFloat(clean);
       if(isNaN(n))return "NaN";
-      if(suffix){
-        const su=suffix.toUpperCase();
-        if(su==="MM")return String(n*1e9);
-        if(su==="M")return String(n*1e6);
-      }
+      if(suffix){const su=suffix.toUpperCase();if(su==="MM")return String(n*1e9);if(su==="M")return String(n*1e6);}
       return String(n);
     });
-    // Now s should be a pure math expression with +, -, *, /
-    // Validate: only allow digits, dots, +, -, *, /, (, ), spaces
     if(!/^[0-9.+\-*/() eE]+$/.test(s))return null;
-    try{
-      // Use Function for safe eval of math expression
-      const result=new Function("return ("+s+")")();
-      if(typeof result==="number"&&isFinite(result))return result;
-      return null;
-    }catch(e){return null;}
+    try{const result=new Function("return ("+s+")")();if(typeof result==="number"&&isFinite(result))return result;return null;}
+    catch(e){return null;}
   };
 
   const vals=lines.map(l=>evalExpr(l.trim()));
@@ -385,6 +572,7 @@ function TabCalc({C}){
   </div>);
 }
 
+// ─── APP ROOT ────────────────────────────────────────────────────────────────
 export default function App(){
   const [tab,setTab]=useState(0);
   const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('cmf-theme')||'dark';}catch(e){return'dark';}});
@@ -425,12 +613,13 @@ export default function App(){
         {error&&<div style={{padding:12,borderRadius:8,background:C.redD,color:C.red,fontSize:13,marginBottom:12}}>Error cargando datos: {error}</div>}
         {loading?<Loading C={C}/>:data?(
           <>
-            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos}/>}
+            {tab===0&&<TabResumen C={C} bancos={data.bancos} dap={data.dap} cal={data.calendario} ffmm={data.ffmmSaldos} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen}/>}
             {tab===1&&<TabBancos C={C} bancos={data.bancos}/>}
             {tab===2&&<TabCalendario C={C} cal={data.calendario}/>}
             {tab===3&&<TabInversiones C={C} dap={data.dap}/>}
             {tab===4&&<TabFFMM C={C} ffmm={data.ffmmSaldos} movimientos={data.ffmmMovimientos}/>}
-            {tab===5&&<TabCalc C={C}/>}
+            {tab===5&&<TabLeasing C={C} leasingDetalle={data.leasingDetalle} leasingResumen={data.leasingResumen}/>}
+            {tab===6&&<TabCalc C={C}/>}
           </>
         ):<div style={{padding:40,textAlign:"center",color:C.td}}>No se pudieron cargar los datos</div>}
       </div>
