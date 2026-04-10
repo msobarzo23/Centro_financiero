@@ -1,197 +1,287 @@
-// ─── URLs de Google Sheets publicadas como CSV ───────────────────────────────
-const URLS = {
-  bancos:       "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=1699395114&single=true&output=csv",
-  dap:          "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=1020614134&single=true&output=csv",
-  calendario:   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=1876759165&single=true&output=csv",
-  ffmmSaldos:   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=1691837276&single=true&output=csv",
-  ffmmMovs:     "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=1691837276&single=true&output=csv",
-  leasingDetalle:  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=675670021&single=true&output=csv",
-  leasingResumen:  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub?gid=771027573&single=true&output=csv",
+import Papa from 'papaparse';
+
+const BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlD_sQVnKW53q0m243_Gr0EletIkDxjaN1-mRzdlma7q6WktHBhXYBBunmz5ZyBg/pub';
+
+const SHEETS = {
+  bancos:          `${BASE}?gid=1699395114&single=true&output=csv`,
+  dap:             `${BASE}?gid=1020614134&single=true&output=csv`,
+  calendario:      `${BASE}?gid=1876759165&single=true&output=csv`,
+  ffmm:            `${BASE}?gid=1691837276&single=true&output=csv`,
+  leasingDetalle:  `${BASE}?gid=675670021&single=true&output=csv`,
+  leasingResumen:  `${BASE}?gid=771027573&single=true&output=csv`,
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-export function getToday() {
-  return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+// Skip title rows (first 3 rows are title/description/blank)
+function skipTitleRows(text) {
+  const lines = text.split('\n');
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('Fecha') || line.startsWith('Empresa')) {
+      headerIdx = i;
+      break;
+    }
+  }
+  return lines.slice(headerIdx).join('\n');
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
-  return lines.slice(1).map(line => {
-    const cols = [];
-    let cur = "", inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      if (line[i] === '"') { inQ = !inQ; }
-      else if (line[i] === ',' && !inQ) { cols.push(cur); cur = ""; }
-      else { cur += line[i]; }
+  const cleaned = skipTitleRows(text);
+  return Papa.parse(cleaned, { header: true, skipEmptyLines: true }).data;
+}
+
+// Parse Chilean number format: 684.491.358 or $684.491.358 or (123.456)
+function parseNum(v) {
+  if (v == null || v === '' || v === '-' || v === '—') return null;
+  let s = String(v).trim();
+  s = s.replace(/\$/g, '').replace(/\s/g, '');
+  const isNeg = s.startsWith('(') && s.endsWith(')');
+  if (isNeg) s = s.slice(1, -1);
+  if (s.includes('.') && s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes('.')) {
+    const dotCount = (s.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      s = s.replace(/\./g, '');
+    } else {
+      const parts = s.split('.');
+      if (parts[1] && parts[1].length === 3) {
+        s = s.replace('.', '');
+      }
     }
-    cols.push(cur);
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (cols[i] || "").trim().replace(/^"|"$/g, ""); });
-    return obj;
-  });
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : (isNeg ? -n : n);
 }
 
-function n(v) {
-  if (v == null || v === "") return 0;
-  // Remove thousands dots and replace decimal comma: "1.234,56" → 1234.56
-  const s = String(v).replace(/\./g, "").replace(",", ".");
-  const r = parseFloat(s);
-  return isNaN(r) ? 0 : r;
+// Parse tasa: "0,560%" or "0.39%" or 0.0039
+function parsePct(v) {
+  if (v == null || v === '' || v === '-') return null;
+  let s = String(v).trim().replace('%', '').replace(',', '.').replace(/"/g, '');
+  const n = parseFloat(s);
+  if (isNaN(n)) return null;
+  if (n > 0.1) return n / 100;
+  return n;
 }
 
-function fetchCSV(url) {
-  return fetch(url).then(r => {
-    if (!r.ok) throw new Error(`HTTP ${r.status} — ${url}`);
-    return r.text();
-  }).then(parseCSV);
+// Parse date DD/MM/YYYY or YYYY-MM-DD
+function parseDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m1) {
+    const day = m1[1].padStart(2, '0');
+    const month = m1[2].padStart(2, '0');
+    return `${m1[3]}-${month}-${day}`;
+  }
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+  return null;
 }
 
-// ─── Parsers por hoja ─────────────────────────────────────────────────────────
+// Encuentra la fila de encabezado en hojas con títulos decorativos arriba.
+// Busca la primera fila que contenga TODAS las palabras clave indicadas.
+function findHeaderIdx(lines, keywords) {
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const lineUp = lines[i].toUpperCase();
+    if (keywords.every(k => lineUp.includes(k.toUpperCase()))) return i;
+  }
+  // Fallback: buscar cualquiera
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const lineUp = lines[i].toUpperCase();
+    if (keywords.some(k => lineUp.includes(k.toUpperCase()))) return i;
+  }
+  return 0;
+}
 
-function parseBancos(rows) {
-  return rows
-    .filter(r => r["Fecha"] && r["Banco"])
+export async function fetchAllData() {
+  const results = await Promise.all(
+    Object.values(SHEETS).map(url =>
+      fetch(url, { cache: 'no-store' }).then(r => r.text()).catch(() => '')
+    )
+  );
+  const [bancosText, dapText, calText, ffmmText, leasingDetText, leasingResText] = results;
+
+  // ── Bancos ────────────────────────────────────────────────────────────────
+  const bancosRaw = parseCSV(bancosText);
+  const bancos = bancosRaw
+    .filter(r => r['Fecha'] && parseDate(r['Fecha']))
     .map(r => ({
-      fecha:        r["Fecha"],
-      banco:        r["Banco"],
-      descripcion:  r["Descripción"] || r["Descripcion"] || "",
-      monto:        r["Monto"] === "" ? null : n(r["Monto"]),
-      saldoInicial: r["Saldo Inicial"] === "" ? null : n(r["Saldo Inicial"]),
-      saldoFinal:   r["Saldo Final"]   === "" ? null : n(r["Saldo Final"]),
-      comentario:   r["Comentario"] || "",
+      fecha: parseDate(r['Fecha']),
+      banco: (r['Banco'] || '').trim(),
+      descripcion: (r['Descripción'] || r['Descripcion'] || '').trim(),
+      monto: parseNum(r['Monto']),
+      saldoInicial: parseNum(r['Saldo Inicial']),
+      saldoFinal: parseNum(r['Saldo Final']),
+      comentario: (r['Comentario'] || '').trim(),
+      estado: (r['Estado'] || '').trim(),
     }));
-}
 
-function parseDAP(rows) {
-  return rows
-    .filter(r => r["Banco"] && r["Monto Inicial"])
-    .map(r => ({
-      banco:        r["Banco"],
-      tipo:         r["Tipo"] || "",
-      fechaInicio:  r["Fecha Inicio"] || "",
-      vencimiento:  r["Vencimiento"]  || r["Fecha Fin"] || "",
-      dias:         n(r["Días"] || r["Dias"] || 0),
-      tasa:         n(r["Tasa"]) / 100,
-      montoInicial: n(r["Monto Inicial"]),
-      ganancia:     n(r["Ganancia"]),
-      vigente:      (r["Vigente"] || "").toLowerCase(),
-      comentario:   r["Para qué"] || r["Comentario"] || "",
-    }));
-}
-
-function parseCalendario(rows) {
-  return rows
-    .filter(r => r["Fecha"] && r["Concepto"])
-    .map(r => ({
-      fecha:     r["Fecha"],
-      concepto:  r["Concepto"],
-      monto:     n(r["Monto"]),
-      guardado:  n(r["Guardado"] || r["Monto Guardado"] || 0),
-      falta:     n(r["Falta"] || 0),
-      comentario: r["Comentario"] || "",
-    }));
-}
-
-function parseFFMMSaldos(rows) {
-  return rows
-    .filter(r => r["Empresa"] && r["Fondo"])
-    .map(r => ({
-      empresa:      r["Empresa"],
-      fondo:        r["Fondo"],
-      admin:        r["Administradora"] || r["Admin"] || "",
-      invertido:    n(r["Invertido"] || r["Monto Invertido"] || 0),
-      valorActual:  n(r["Valor Actual"] || 0),
-      rentabilidad: n(r["Rentabilidad"] || 0),
-    }));
-}
-
-function parseFFMMMovs(rows) {
-  return rows
-    .filter(r => r["Fecha"] && r["Empresa"])
-    .map(r => ({
-      fecha:   r["Fecha"],
-      empresa: r["Empresa"],
-      fondo:   r["Fondo"],
-      tipo:    r["Tipo"],
-      monto:   n(r["Monto"]),
-    }));
-}
-
-// ─── NUEVO: Leasing Detalle ───────────────────────────────────────────────────
-function parseLeasingDetalle(rows) {
-  return rows
+  // ── DAP ───────────────────────────────────────────────────────────────────
+  const dapRaw = parseCSV(dapText);
+  const dap = dapRaw
     .filter(r => {
-      const banco = r["Banco / Emisor"] || r["Banco/Emisor"] || r["Banco"] || "";
-      return banco !== "" && (r["Estado"] || "").trim().toUpperCase() === "ACTIVO";
+      const fi = r['Fecha Inicio'] || '';
+      return fi && fi !== 'Total' && fi !== 'TOTALES' && parseDate(fi);
+    })
+    .map(r => {
+      const tasa = parsePct(r['Tasa']) || 0;
+      const montoIni = parseNum(r['Monto Inicial']) || 0;
+      const montoFin = parseNum(r['Monto Final']) || 0;
+      const ganancia = parseNum(r['Ganancia']) || 0;
+      return {
+        fechaInicio: parseDate(r['Fecha Inicio']),
+        vencimiento: parseDate(r['Vencimiento']),
+        dias: parseNum(r['Días']) || parseNum(r['Dias']) || 0,
+        tasa,
+        montoInicial: montoIni,
+        montoFinal: montoFin,
+        ganancia,
+        tipo: (r['Tipo'] || '').trim(),
+        vigente: (r['Vigente'] || '').trim().toLowerCase(),
+        banco: (r['Banco'] || '').trim(),
+        estado: (r['Estado'] || r['estado'] || '').trim(),
+        comentario: (r['Comentario'] || '').trim(),
+      };
+    });
+
+  // ── Calendario ────────────────────────────────────────────────────────────
+  const calRaw = parseCSV(calText);
+  const calendario = calRaw
+    .filter(r => {
+      const f = r['Fecha'] || '';
+      return f && f !== 'TOTALES' && f !== 'Total' && parseDate(f);
     })
     .map(r => ({
-      id:              r["ID"] || "",
-      banco:           r["Banco / Emisor"] || r["Banco/Emisor"] || r["Banco"] || "",
-      nTractos:        n(r["N Tractos"] || r["N° Tractos"] || 0),
-      cuotaUFIndiv:    n(r["Cuota UF Individual"] || 0),
-      cuotaUFGrupo:    n(r["Cuota UF Total Grupo"] || r["Cuota UF Grupo"] || 0),
-      diaVto:          n(r["Dia Vcto"] || r["Día Vcto"] || 0),
-      fechaInicio:     r["Fecha Inicio"] || "",
-      fechaFin:        r["Fecha Fin (Vencimiento)"] || r["Fecha Fin"] || r["Vencimiento"] || "",
-      cuotasTotales:   n(r["Cuotas Totales"] || 0),
-      cuotasPagadas:   n(r["Cuotas Pagadas"] || 0),
-      cuotasPorPagar:  n(r["Cuotas Por Pagar"] || 0),
-      estado:          r["Estado"] || "",
-      deudaUF:         n(r["Deuda Pendiente UF"] || 0),
-      cuotaCLPsIVA:    n(r["Cuota CLP s/IVA"] || r["Cuota CLP s IVA"] || 0),
-      cuotaCLPcIVA:    n(r["Cuota CLP c/IVA"] || r["Cuota CLP c IVA"] || 0),
+      fecha: parseDate(r['Fecha']),
+      monto: parseNum(r['Monto']) || 0,
+      guardado: parseNum(r['Guardado']) || 0,
+      falta: parseNum(r['Falta']) || 0,
+      concepto: (r['Concepto'] || '').trim(),
+      estado: (r['Estado'] || '').trim(),
+      comentario: (r['Comentario'] || '').trim(),
     }));
-}
 
-// ─── NUEVO: Leasing Resumen ───────────────────────────────────────────────────
-function parseLeasingResumen(rows) {
-  return rows
-    .filter(r => r["Mes"] && r["Anio"] || r["Año"])
+  // ── FFMM ──────────────────────────────────────────────────────────────────
+  const ffmmLines = ffmmText.split('\n');
+  const ffmmSaldos = [];
+  const ffmmMovimientos = [];
+
+  let saldoHeaderIdx = -1, movHeaderIdx = -1;
+  for (let i = 0; i < ffmmLines.length; i++) {
+    const line = ffmmLines[i];
+    if (line.includes('Empresa') && line.includes('Administradora')) saldoHeaderIdx = i;
+    if (line.includes('Fecha') && line.includes('Empresa') && line.includes('Tipo')) movHeaderIdx = i;
+  }
+
+  if (saldoHeaderIdx >= 0) {
+    const saldoEnd = movHeaderIdx > 0 ? movHeaderIdx : ffmmLines.length;
+    const saldoCSV = ffmmLines.slice(saldoHeaderIdx, saldoEnd).join('\n');
+    const saldoData = Papa.parse(saldoCSV, { header: true, skipEmptyLines: true }).data;
+    for (const r of saldoData) {
+      const empresa = (r['Empresa'] || '').trim();
+      if (!empresa || empresa === 'TOTAL' || empresa === 'TOTALES' || empresa === 'SALDOS VIGENTES' || empresa === 'HISTORIAL DE MOVIMIENTOS') continue;
+      ffmmSaldos.push({
+        empresa,
+        fondo: (r['Fondo'] || '').trim(),
+        admin: (r['Administradora'] || '').trim(),
+        invertido: parseNum(r['Monto Invertido']) || 0,
+        valorActual: parseNum(r['Valor Actual']) || 0,
+        rentabilidad: parseNum(r['Rentabilidad']) || 0,
+      });
+    }
+  }
+
+  if (movHeaderIdx >= 0) {
+    const movCSV = ffmmLines.slice(movHeaderIdx).join('\n');
+    const movData = Papa.parse(movCSV, { header: true, skipEmptyLines: true }).data;
+    for (const r of movData) {
+      const fecha = parseDate(r['Fecha']);
+      if (!fecha) continue;
+      ffmmMovimientos.push({
+        fecha,
+        empresa: (r['Empresa'] || '').trim(),
+        fondo: (r['Fondo'] || '').trim(),
+        tipo: (r['Tipo'] || '').trim(),
+        monto: parseNum(r['Monto']) || 0,
+        comentario: (r['Comentario'] || '').trim(),
+      });
+    }
+  }
+
+  // ── LEASING DETALLE (NUEVO) ───────────────────────────────────────────────
+  // Header contiene "ID", "Banco" y "Estado" en la misma fila.
+  const leasingDetLines = leasingDetText.split('\n');
+  const leasingDetHeaderIdx = findHeaderIdx(leasingDetLines, ['ID', 'BANCO', 'ESTADO']);
+  const leasingDetCSV = leasingDetLines.slice(leasingDetHeaderIdx).join('\n');
+  const leasingDetRaw = Papa.parse(leasingDetCSV, { header: true, skipEmptyLines: true }).data;
+
+  const leasingDetalle = leasingDetRaw
+    .filter(r => {
+      const banco = (r['Banco / Emisor'] || r['Banco/Emisor'] || r['Banco'] || '').trim();
+      const estado = (r['Estado'] || '').trim().toUpperCase();
+      return banco !== '' && !banco.toUpperCase().includes('TOTAL') && estado === 'ACTIVO';
+    })
     .map(r => ({
-      mes:             r["Mes"] || "",
-      anio:            r["Anio"] || r["Año"] || "",
-      cuotaUFTotal:    n(r["Cuota UF Total Mes"] || r["Cuota UF Total"] || 0),
-      cuotaCLPsIVA:    n(r["Cuota CLP s/IVA"] || r["Cuota CLP s IVA"] || 0),
-      cuotaCLPcIVA:    n(r["Cuota CLP c/IVA"] || r["Cuota CLP c IVA"] || 0),
-      bciDia5:         n(r["BCI (UF) Dia 5"] || r["BCI (UF) Día 5"] || r["BCI Dia5"] || r["BCI (UF)"] || 0),
-      bciDia15:        n(r["BCI (UF) Dia 15"] || r["BCI (UF) Día 15"] || r["BCI Dia15"] || 0),
-      vfsVolvo:        n(r["VFS VOLVO (UF)"] || r["VFS (UF)"] || r["VFS VOLVO"] || 0),
-      bancoChile:      n(r["BANCO DE CHILE (UF)"] || r["Banco Chile (UF)"] || r["BANCO DE CHILE"] || 0),
-      contratosActivos: n(r["Contratos Activos"] || 0),
-      vesteEstesMes:   r["Vence este mes"] || "",
-      delta:           n(r["Delta vs mes anterior"] || r["Delta"] || 0),
+      id:             (r['ID'] || '').trim(),
+      banco:          (r['Banco / Emisor'] || r['Banco/Emisor'] || r['Banco'] || '').trim(),
+      nTractos:       parseNum(r['N Tractos'] || r['N° Tractos'] || '') || 0,
+      cuotaUFIndiv:   parseNum(r['Cuota UF Individual'] || '') || 0,
+      cuotaUFGrupo:   parseNum(r['Cuota UF Total Grupo'] || r['Cuota UF Grupo'] || '') || 0,
+      diaVto:         parseNum(r['Dia Vcto'] || r['Día Vcto'] || '') || 0,
+      fechaInicio:    parseDate(r['Fecha Inicio']) || '',
+      fechaFin:       parseDate(r['Fecha Fin (Vencimiento)'] || r['Fecha Fin'] || r['Vencimiento'] || '') || '',
+      cuotasTotales:  parseNum(r['Cuotas Totales'] || '') || 0,
+      cuotasPagadas:  parseNum(r['Cuotas Pagadas'] || '') || 0,
+      cuotasPorPagar: parseNum(r['Cuotas Por Pagar'] || '') || 0,
+      estado:         (r['Estado'] || '').trim(),
+      deudaUF:        parseNum(r['Deuda Pendiente UF'] || '') || 0,
+      cuotaCLPsIVA:   parseNum(r['Cuota CLP s/IVA'] || r['Cuota CLP s IVA'] || '') || 0,
+      cuotaCLPcIVA:   parseNum(r['Cuota CLP c/IVA'] || r['Cuota CLP c IVA'] || '') || 0,
     }));
-}
 
-// ─── Fetch principal ──────────────────────────────────────────────────────────
-export async function fetchAllData() {
-  const [
-    rawBancos,
-    rawDAP,
-    rawCal,
-    rawFFMM,
-    rawFFMMM,
-    rawLeasingDet,
-    rawLeasingRes,
-  ] = await Promise.all([
-    fetchCSV(URLS.bancos),
-    fetchCSV(URLS.dap),
-    fetchCSV(URLS.calendario),
-    fetchCSV(URLS.ffmmSaldos),
-    fetchCSV(URLS.ffmmMovs),
-    fetchCSV(URLS.leasingDetalle),
-    fetchCSV(URLS.leasingResumen),
-  ]);
+  // ── LEASING RESUMEN (NUEVO) ───────────────────────────────────────────────
+  // Header contiene "Mes" y "Cuota" en la misma fila.
+  const leasingResLines = leasingResText.split('\n');
+  const leasingResHeaderIdx = findHeaderIdx(leasingResLines, ['MES', 'CUOTA']);
+  const leasingResCSV = leasingResLines.slice(leasingResHeaderIdx).join('\n');
+  const leasingResRaw = Papa.parse(leasingResCSV, { header: true, skipEmptyLines: true }).data;
+
+  const leasingResumen = leasingResRaw
+    .filter(r => {
+      const mes = (r['Mes'] || '').trim();
+      return mes !== '' && mes.toUpperCase() !== 'MES' && !mes.toUpperCase().includes('TOTAL');
+    })
+    .map(r => ({
+      mes:              (r['Mes'] || '').trim(),
+      anio:             (r['Anio'] || r['Año'] || '').trim(),
+      cuotaUFTotal:     parseNum(r['Cuota UF Total Mes'] || r['Cuota UF Total'] || '') || 0,
+      cuotaCLPsIVA:     parseNum(r['Cuota CLP s/IVA'] || r['Cuota CLP s IVA'] || '') || 0,
+      cuotaCLPcIVA:     parseNum(r['Cuota CLP c/IVA'] || r['Cuota CLP c IVA'] || '') || 0,
+      // BCI cobra en dos fechas distintas (día 5 y día 15)
+      bciDia5:          parseNum(r['BCI (UF) Dia 5'] || r['BCI (UF) Día 5'] || r['BCI Dia5'] || r['BCI (UF)'] || '') || 0,
+      bciDia15:         parseNum(r['BCI (UF) Dia 15'] || r['BCI (UF) Día 15'] || r['BCI Dia15'] || '') || 0,
+      vfsVolvo:         parseNum(r['VFS VOLVO (UF)'] || r['VFS VOLVO'] || r['VFS (UF)'] || '') || 0,
+      bancoChile:       parseNum(r['BANCO DE CHILE (UF)'] || r['BANCO DE CHILE'] || r['Banco Chile (UF)'] || '') || 0,
+      contratosActivos: parseNum(r['Contratos Activos'] || '') || 0,
+      vesteEstesMes:    (r['Vence este mes'] || '').trim(),
+      delta:            parseNum(r['Delta vs mes anterior'] || r['Delta'] || '') || 0,
+    }));
 
   return {
-    bancos:          parseBancos(rawBancos),
-    dap:             parseDAP(rawDAP),
-    calendario:      parseCalendario(rawCal),
-    ffmmSaldos:      parseFFMMSaldos(rawFFMM),
-    ffmmMovimientos: parseFFMMMovs(rawFFMMM),
-    leasingDetalle:  parseLeasingDetalle(rawLeasingDet),
-    leasingResumen:  parseLeasingResumen(rawLeasingRes),
+    bancos,
+    dap,
+    calendario,
+    ffmmSaldos,
+    ffmmMovimientos,
+    leasingDetalle,
+    leasingResumen,
   };
+}
+
+export function getToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
