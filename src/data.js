@@ -9,6 +9,7 @@ const SHEETS = {
   ffmm:            `${BASE}?gid=1691837276&single=true&output=csv`,
   leasingDetalle:  `${BASE}?gid=675670021&single=true&output=csv`,
   leasingResumen:  `${BASE}?gid=771027573&single=true&output=csv`,
+  credito:         `${BASE}?gid=1158539978&single=true&output=csv`,
 };
 
 // Skip title rows (first 3 rows are title/description/blank)
@@ -145,7 +146,7 @@ export async function fetchAllData() {
       fetch(url, { cache: 'no-store' }).then(r => r.text()).catch(() => '')
     )
   );
-  const [bancosText, dapText, calText, ffmmText, leasingDetText, leasingResText] = results;
+  const [bancosText, dapText, calText, ffmmText, leasingDetText, leasingResText, creditoText] = results;
 
   // ── Bancos ────────────────────────────────────────────────────────────────
   const bancosRaw = parseCSV(bancosText);
@@ -327,6 +328,37 @@ export async function fetchAllData() {
       };
     });
 
+  // ── CRÉDITO COMERCIAL ────────────────────────────────────────────────────
+  // CSV tiene header en fila 1 directamente, sin títulos decorativos.
+  // Formato CLP con $: "$5.000.000.000" → parseNumCLP tras quitar $
+  const creditoRaw = Papa.parse(creditoText, { header: true, skipEmptyLines: true }).data;
+  const hoyCredito = getToday();
+
+  const credito = creditoRaw
+    .filter(r => {
+      const nc = r['N° Cuota'] || r['N Cuota'] || r['N°Cuota'] || '';
+      return nc !== '' && !isNaN(parseInt(nc));
+    })
+    .map(r => {
+      const fechaVenc = parseDate(r['Fecha Vencimiento'] || '');
+      return {
+        nCuota:       parseInt(r['N° Cuota'] || r['N Cuota'] || '0', 10),
+        fechaVenc:    fechaVenc || '',
+        amortizacion: parseNumCLP(r['Amortización Capital'] || r['Amortizacion Capital'] || ''),
+        interes:      parseNumCLP(r['Monto Interés'] || r['Monto Interes'] || ''),
+        valorCuota:   parseNumCLP(r['Valor Cuota'] || ''),
+        saldoInsoluto:parseNumCLP(r['Saldo Insoluto'] || ''),
+        pagada:       fechaVenc ? fechaVenc < hoyCredito : false,
+      };
+    });
+
+  // Cuotas pendientes = las que vencen hoy o después
+  const creditoPendiente = credito.filter(c => c.fechaVenc >= hoyCredito);
+  // Saldo insoluto actual = primera cuota pendiente (o última si todas pagadas)
+  const saldoInsolutoActual = creditoPendiente.length > 0
+    ? creditoPendiente[0].saldoInsoluto
+    : credito.length > 0 ? credito[credito.length - 1].saldoInsoluto : 0;
+
   return {
     bancos,
     dap,
@@ -335,6 +367,9 @@ export async function fetchAllData() {
     ffmmMovimientos,
     leasingDetalle,
     leasingResumen,
+    credito,
+    creditoPendiente,
+    saldoInsolutoActual,
   };
 }
 
