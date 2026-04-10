@@ -119,12 +119,13 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,credito
   const cuotaDia5 =leasingDetalle.filter(d=>d.diaVto===5 ||d.diaVto===4 ).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
   const cuotaDia15=leasingDetalle.filter(d=>d.diaVto===15||d.diaVto===14).reduce((s,d)=>s+d.cuotaCLPcIVA,0);
   const cuotaTotalLeasing=leasingDetalle.reduce((s,d)=>s+d.cuotaCLPcIVA,0);
-  // Deuda leasing s/IVA en CLP = suma de cuotaCLPsIVA * cuotasPorPagar por contrato
+  // Deuda leasing s/IVA = flujo real de caja: cuota mensual s/IVA × cuotas que quedan
   const deudaLeasingSIVACLP=leasingDetalle.reduce((s,d)=>s+(d.cuotaCLPsIVA*d.cuotasPorPagar),0);
 
   // Crédito comercial
   const cuotasCreditoPend=creditoPendiente.length;
-  const proximaCuotaCredito=creditoPendiente.length>0?creditoPendiente[0]:null;
+  // Próxima cuota con pago real (valorCuota > 0, ignorar meses de gracia)
+  const proximaCuotaCredito=creditoPendiente.find(c=>c.valorCuota>0)||creditoPendiente[0]||null;
 
   const noData=bancosHoy.length===0;
   const mesLabel=new Date(hoy+"T12:00:00").toLocaleDateString("es-CL",{month:"long"});
@@ -150,7 +151,7 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,credito
 
       {/* Cuadro leasing */}
       <div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:2,minWidth:260}}>
-        <div style={{fontSize:11,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Leasing · {nContratosLeasing} contratos · {fUF(totalDeudaLeasingUF)} UF</div>
+        <div style={{fontSize:11,color:C.tm,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.5px"}}>Leasing · {nContratosLeasing} contratos · {fUF(totalDeudaLeasingUF)} UF · <span style={{color:C.teal}}>{f(deudaLeasingSIVACLP)}</span> s/IVA</div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           {cuotaDia5>0&&<div style={{flex:1,minWidth:100}}>
             <div style={{fontSize:11,color:C.td,marginBottom:2}}>Día 5 c/mes</div>
@@ -171,16 +172,16 @@ function TabResumen({C,bancos,dap,cal,ffmm,leasingDetalle,leasingResumen,credito
       {saldoInsoluto>0&&<div style={{background:C.surface,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.border}`,flex:1,minWidth:160}}>
         <div style={{fontSize:11,color:C.tm,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Crédito comercial</div>
         <div style={{fontSize:20,fontWeight:700,color:C.red,fontFamily:"monospace"}}>{f(saldoInsoluto)}</div>
-        <div style={{fontSize:11,color:C.td,marginTop:4}}>{cuotasCreditoPend} cuotas pendientes</div>
+        <div style={{fontSize:11,color:C.td,marginTop:4}}>{cuotasCreditoPend} cuotas · capital+intereses</div>
         {proximaCuotaCredito&&<div style={{fontSize:11,color:C.td}}>Próxima: {fd(proximaCuotaCredito.fechaVenc)} · {f(proximaCuotaCredito.valorCuota)}</div>}
       </div>}
 
       {/* Cuadro deuda total neta */}
       {(deudaLeasingSIVACLP>0||saldoInsoluto>0)&&<div style={{background:C.surfaceAlt,borderRadius:10,padding:"14px 16px",border:`0.5px solid ${C.borderL}`,flex:1,minWidth:160}}>
-        <div style={{fontSize:11,color:C.tm,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Deuda total neta</div>
+        <div style={{fontSize:11,color:C.tm,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Deuda total a pagar</div>
         <div style={{fontSize:20,fontWeight:700,color:C.red,fontFamily:"monospace"}}>{f(deudaLeasingSIVACLP+saldoInsoluto)}</div>
         <div style={{fontSize:10,color:C.td,marginTop:4}}>Leasing s/IVA: {f(deudaLeasingSIVACLP)}</div>
-        <div style={{fontSize:10,color:C.td}}>Crédito: {f(saldoInsoluto)}</div>
+        <div style={{fontSize:10,color:C.td}}>Crédito cap+int: {f(saldoInsoluto)}</div>
       </div>}
 
     </div>}
@@ -558,7 +559,7 @@ function TabCredito({C,credito,creditoPendiente,saldoInsoluto}){
   return(<div>
     {/* ── Métricas ── */}
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
-      <Metric C={C} label="Saldo insoluto" value={f(saldoInsoluto)} sub="Capital pendiente" color={C.red}/>
+      <Metric C={C} label="Total a pagar" value={f(saldoInsoluto)} sub="Capital + intereses futuros" color={C.red}/>
       <Metric C={C} label="Cuotas pendientes" value={creditoPendiente.length} sub={`de ${totalCuotas} totales · pagadas: ${pagadas}`} color={C.amber}/>
       <Metric C={C} label="Cuota mensual" value={f(cuotaMensual)} sub="Capital + interés" color={C.text}/>
       <Metric C={C} label="Intereses pendientes" value={f(interesesPend)} sub={`Total histórico: ${f(totalIntereses)}`} color={C.td}/>
