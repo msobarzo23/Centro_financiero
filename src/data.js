@@ -402,15 +402,16 @@ export async function fetchAllData() {
   return {
     bancos,
     dap,
-    calendario,
-    ffmmSaldos,
-    ffmmMovimientos,
+    cal: calendario,
+    ffmm: ffmmSaldos,
+    ffmmMov: ffmmMovimientos,
     leasingDetalle,
     leasingResumen,
     credito,
     creditoPendiente,
-    saldoInsolutoActual,
+    saldoInsoluto: saldoInsolutoActual,
     ventas,
+    hoy: getToday(),
   };
 }
 
