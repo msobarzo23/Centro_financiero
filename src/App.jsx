@@ -11,6 +11,7 @@ import { ToastStack } from './components/Toast.jsx';
 
 import TabResumen from './tabs/TabResumen.jsx';
 import TabBancos from './tabs/TabBancos.jsx';
+import TabVentas from './tabs/TabVentas.jsx';
 import {
   TabCalendario,
   TabFlujoCaja,
@@ -241,6 +242,8 @@ export default function App() {
       case 2:
         return <TabCalendario {...commonProps} cal={cal} />;
       case 3:
+        return <TabVentas {...commonProps} ventas={ventas} />;
+      case 4:
         return (
           <TabFlujoCaja
             {...commonProps}
@@ -250,11 +253,11 @@ export default function App() {
             creditoPendiente={creditoPendiente}
           />
         );
-      case 4:
-        return <TabInversiones {...commonProps} dap={dap} />;
       case 5:
-        return <TabFFMM {...commonProps} ffmm={ffmm} movimientos={ffmmMov} />;
+        return <TabInversiones {...commonProps} dap={dap} />;
       case 6:
+        return <TabFFMM {...commonProps} ffmm={ffmm} movimientos={ffmmMov} />;
+      case 7:
         return (
           <TabLeasing
             {...commonProps}
@@ -262,7 +265,7 @@ export default function App() {
             leasingResumen={leasingResumen}
           />
         );
-      case 7:
+      case 8:
         return (
           <TabCredito
             {...commonProps}
@@ -271,9 +274,9 @@ export default function App() {
             saldoInsoluto={saldoInsoluto}
           />
         );
-      case 8:
-        return <TabAlertas {...commonProps} alertas={alertas} />;
       case 9:
+        return <TabAlertas {...commonProps} alertas={alertas} />;
+      case 10:
         return <TabCalc {...commonProps} />;
       default:
         return null;
