@@ -129,8 +129,10 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }
   const meses12 = [...mesesSet].sort().slice(-14);
 
+  // Usamos neto (sin IVA) para mantener coherencia con los egresos que
+  // tambien estan en valores sin IVA (cuotaLeasing s/IVA, calendario, credito).
   const ventasPorMes = {};
-  ventas.porMes.forEach(m => { ventasPorMes[m.mes] = m.montoReal; });
+  ventas.porMes.forEach(m => { ventasPorMes[m.mes] = m.neto; });
 
   const data12 = meses12.map(mes => {
     const ingreso = ventasPorMes[mes] || 0;
@@ -156,7 +158,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }
 
   const ventasPorDia = {};
-  ventas.porDia.forEach(d => { ventasPorDia[d.fecha] = d.montoReal; });
+  ventas.porDia.forEach(d => { ventasPorDia[d.fecha] = d.neto; });
   const egresosPorDia = {};
   calendario.forEach(c => { if (c.fecha) egresosPorDia[c.fecha] = (egresosPorDia[c.fecha] || 0) + c.monto; });
   const diasVtoLeasing = [...new Set(leasingDetalle.map(d => d.diaVto))];
@@ -302,13 +304,13 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         <Metric C={C} label={`Ingresos ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
-          value={ingresoMesAct > 0 ? f(ingresoMesAct) : "Sin datos"} sub="Facturado c/IVA" color={C.green}/>
+          value={ingresoMesAct > 0 ? f(ingresoMesAct) : "Sin datos"} sub="Neto facturado" color={C.green}/>
         <Metric C={C} label="Egresos comprometidos"
           value={f(egresoMesAct)} sub="Cal + leasing s/IVA + crédito" color={C.red}/>
         <Metric C={C} label="Resultado neto"
           value={f(netoMesAct)} sub="Ingreso − egreso" color={netoMesAct >= 0 ? C.green : C.red}/>
         <Metric C={C} label="Promedio ingreso/mes"
-          value={f(promedioIngMensual)} sub="Histórico disponible" color={C.accent}/>
+          value={f(promedioIngMensual)} sub="Neto · meses con ventas (hasta 14m)" color={C.accent}/>
       </div>
 
       <div style={{

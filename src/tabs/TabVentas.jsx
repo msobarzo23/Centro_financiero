@@ -6,7 +6,6 @@ import { f, fS, fd, mesLabel } from '../utils/format.js';
 export default function TabVentas({ C, ventas, isMobile, hoy }) {
   const [clienteFiltro, setClienteFiltro] = useState('');
   const [anioFiltro, setAnioFiltro] = useState('TODOS');
-  const [ordenCliente, setOrdenCliente] = useState('monto'); // monto | rotacion
 
   const rows = useMemo(() => ventas?.rows || [], [ventas]);
   const porMes = useMemo(() => ventas?.porMes || [], [ventas]);
@@ -26,68 +25,83 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
     });
   }, [rows, anioFiltro, clienteFiltro]);
 
-  // ─── Métricas globales ─────────────────────────────────────────────────
+  // ─── Métricas globales (todo en NETO) ──────────────────────────────────
   const mesActual = hoy.substring(0, 7);
   const anioActual = hoy.substring(0, 4);
+  const anioPasado = String(Number(anioActual) - 1);
+  const mesAnioPasado = `${anioPasado}-${mesActual.slice(5)}`;
+
   const rowsMes = rows.filter((r) => r.fecha.startsWith(mesActual));
   const rowsAnio = rows.filter((r) => r.fecha.startsWith(anioActual));
-  const totalMes = rowsMes.reduce((s, r) => s + r.montoReal, 0);
-  const totalAnio = rowsAnio.reduce((s, r) => s + r.montoReal, 0);
+  const totalMes = rowsMes.reduce((s, r) => s + r.neto, 0);
+  const totalAnio = rowsAnio.reduce((s, r) => s + r.neto, 0);
   const facturasMes = rowsMes.length;
   const facturasAnio = rowsAnio.length;
   const ticketPromedio = facturasAnio > 0 ? totalAnio / facturasAnio : 0;
 
-  // Afectas vs exentas (sobre YTD).
-  const afectasYTD = rowsAnio.filter((r) => r.afecta).reduce((s, r) => s + r.montoReal, 0);
-  const exentasYTD = rowsAnio.filter((r) => !r.afecta).reduce((s, r) => s + r.montoReal, 0);
+  // Afectas vs exentas del año (neto).
+  const afectasYTD = rowsAnio.filter((r) => r.afecta).reduce((s, r) => s + r.neto, 0);
+  const exentasYTD = rowsAnio.filter((r) => !r.afecta).reduce((s, r) => s + r.neto, 0);
   const pctAfectas = totalAnio > 0 ? afectasYTD / totalAnio : 0;
 
-  // Comparativa mes actual vs mes anterior.
-  const d = new Date(hoy + 'T12:00:00');
-  d.setMonth(d.getMonth() - 1);
-  const mesAnterior = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const totalMesAnterior = rows
-    .filter((r) => r.fecha.startsWith(mesAnterior))
-    .reduce((s, r) => s + r.montoReal, 0);
-  const deltaMes = totalMesAnterior > 0 ? (totalMes - totalMesAnterior) / totalMesAnterior : null;
+  // Comparación año anterior: mismo mes y mismo periodo del año (hasta la fecha).
+  const totalMismoMesAnioPasado = rows
+    .filter((r) => r.fecha.startsWith(mesAnioPasado))
+    .reduce((s, r) => s + r.neto, 0);
+  const deltaMesYoY =
+    totalMismoMesAnioPasado > 0
+      ? (totalMes - totalMismoMesAnioPasado) / totalMismoMesAnioPasado
+      : null;
 
-  // ─── Top clientes ──────────────────────────────────────────────────────
-  // Agrupamos por razón social; para rotación calculamos días promedio
-  // entre factura y hoy (proxy simple; si más adelante hay fecha de pago
-  // real se puede mejorar).
+  const mmddHoy = hoy.slice(5); // "MM-DD" del año actual
+  const totalAnioPasadoALaFecha = rows
+    .filter((r) => r.fecha.startsWith(anioPasado) && r.fecha.slice(5) <= mmddHoy)
+    .reduce((s, r) => s + r.neto, 0);
+  const deltaAnioYoY =
+    totalAnioPasadoALaFecha > 0
+      ? (totalAnio - totalAnioPasadoALaFecha) / totalAnioPasadoALaFecha
+      : null;
+
+  // ─── Top clientes por monto neto ───────────────────────────────────────
   const topClientes = useMemo(() => {
     const base = anioFiltro === 'TODOS' ? rows : rowsAnio;
     const map = {};
     base.forEach((r) => {
       const k = r.razonSocial || 'SIN RAZON SOCIAL';
-      if (!map[k]) map[k] = { cliente: k, monto: 0, facturas: 0, fechas: [] };
-      map[k].monto += r.montoReal;
+      if (!map[k]) map[k] = { cliente: k, monto: 0, facturas: 0 };
+      map[k].monto += r.neto;
       map[k].facturas += 1;
-      map[k].fechas.push(r.fecha);
     });
-    const lista = Object.values(map).map((c) => {
-      const diasPromedio =
-        c.fechas.reduce((s, fch) => {
-          const d1 = new Date(fch + 'T12:00:00');
-          const d2 = new Date(hoy + 'T12:00:00');
-          return s + Math.max(0, Math.floor((d2 - d1) / 864e5));
-        }, 0) / c.fechas.length;
-      return { ...c, diasPromedio };
-    });
-    lista.sort((a, b) =>
-      ordenCliente === 'rotacion' ? a.diasPromedio - b.diasPromedio : b.monto - a.monto,
-    );
-    return lista.slice(0, 10);
-  }, [rows, rowsAnio, anioFiltro, ordenCliente, hoy]);
+    return Object.values(map)
+      .sort((a, b) => b.monto - a.monto)
+      .slice(0, 10);
+  }, [rows, rowsAnio, anioFiltro]);
 
-  // ─── Gráfico evolución mensual (últimos 12 meses) ──────────────────────
-  const mesesGrafico = useMemo(() => {
-    const data = porMes.slice(-12);
-    if (data.length === 0) return [];
-    return data;
+  // ─── Gráfico evolución mensual con YoY ─────────────────────────────────
+  // Usa porMes.neto y superpone los mismos meses del año anterior.
+  const porMesNetoMap = useMemo(() => {
+    const m = {};
+    porMes.forEach((r) => (m[r.mes] = r.neto));
+    return m;
   }, [porMes]);
 
-  const maxMes = mesesGrafico.reduce((m, r) => Math.max(m, r.montoReal), 0);
+  const mesesGrafico = useMemo(() => {
+    const ultimos = porMes.slice(-12);
+    return ultimos.map((m) => {
+      const [y, mm] = m.mes.split('-').map(Number);
+      const mesPasado = `${y - 1}-${String(mm).padStart(2, '0')}`;
+      return {
+        mes: m.mes,
+        neto: m.neto,
+        netoAnioPasado: porMesNetoMap[mesPasado] || 0,
+      };
+    });
+  }, [porMes, porMesNetoMap]);
+
+  const maxMes = mesesGrafico.reduce(
+    (m, r) => Math.max(m, r.neto, r.netoAnioPasado),
+    0,
+  );
 
   // Últimas facturas (máximo 50 en la tabla para no sobrecargar).
   const facturasTabla = useMemo(
@@ -155,18 +169,25 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Métricas principales */}
+      {/* Métricas principales (todas en neto) */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {metricCard(
           'Facturado mes',
           f(totalMes),
-          deltaMes !== null
-            ? `${deltaMes >= 0 ? '+' : ''}${Math.round(deltaMes * 100)}% vs mes anterior`
+          deltaMesYoY !== null
+            ? `${deltaMesYoY >= 0 ? '+' : ''}${Math.round(deltaMesYoY * 100)}% vs mismo mes ${anioPasado}`
             : `${facturasMes} facturas`,
           C.accent,
         )}
-        {metricCard('Facturado año', f(totalAnio), `${facturasAnio} facturas`, C.teal)}
-        {metricCard('Ticket promedio', f(ticketPromedio), 'Sobre YTD', C.amber)}
+        {metricCard(
+          `Facturado ${anioActual}`,
+          f(totalAnio),
+          deltaAnioYoY !== null
+            ? `${deltaAnioYoY >= 0 ? '+' : ''}${Math.round(deltaAnioYoY * 100)}% vs ${anioPasado} a la fecha`
+            : `${facturasAnio} facturas`,
+          C.teal,
+        )}
+        {metricCard('Ticket promedio', f(ticketPromedio), 'Neto sobre YTD', C.amber)}
         {metricCard(
           'Afectas vs exentas',
           `${Math.round(pctAfectas * 100)}%`,
@@ -187,14 +208,42 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
         >
           <div
             style={{
-              fontSize: 11,
-              color: C.tm,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
               marginBottom: 12,
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
+              gap: 8,
+              flexWrap: 'wrap',
             }}
           >
-            Evolución últimos {mesesGrafico.length} meses
+            <div
+              style={{
+                fontSize: 11,
+                color: C.tm,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Evolución últimos {mesesGrafico.length} meses · neto
+            </div>
+            <div style={{ display: 'flex', gap: 10, fontSize: 10, color: C.td }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, background: C.teal, borderRadius: 2 }} />
+                {anioActual}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    background: C.teal,
+                    borderRadius: 2,
+                    opacity: 0.3,
+                  }}
+                />
+                {anioPasado}
+              </span>
+            </div>
           </div>
           <svg
             viewBox={`0 0 ${Math.max(mesesGrafico.length * 50, 200)} 160`}
@@ -213,12 +262,25 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
               />
             ))}
             {mesesGrafico.map((m, i) => {
-              const h = maxMes > 0 ? (m.montoReal / maxMes) * 120 : 0;
+              const h = maxMes > 0 ? (m.neto / maxMes) * 120 : 0;
+              const hYoY = maxMes > 0 ? (m.netoAnioPasado / maxMes) * 120 : 0;
               const x = i * 50 + 8;
               const y = 130 - h;
+              const yYoY = 130 - hYoY;
               const esHoy = m.mes === mesActual;
               return (
                 <g key={m.mes}>
+                  {m.netoAnioPasado > 0 && (
+                    <rect
+                      x={x - 4}
+                      y={yYoY}
+                      width={34}
+                      height={hYoY}
+                      fill={C.teal}
+                      opacity={0.25}
+                      rx={2}
+                    />
+                  )}
                   <rect
                     x={x}
                     y={y}
@@ -236,7 +298,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                     fill={C.td}
                     fontWeight={esHoy ? 700 : 400}
                   >
-                    {fS(m.montoReal)}
+                    {fS(m.neto)}
                   </text>
                   <text
                     x={x + 17}
@@ -326,29 +388,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
               letterSpacing: '0.5px',
             }}
           >
-            Top 10 clientes {anioFiltro === 'TODOS' ? 'histórico' : anioFiltro}
-          </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[
-              { key: 'monto', label: 'Por monto' },
-              { key: 'rotacion', label: 'Por rotación' },
-            ].map((o) => (
-              <button
-                key={o.key}
-                onClick={() => setOrdenCliente(o.key)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 4,
-                  fontSize: 11,
-                  background: ordenCliente === o.key ? C.accent : C.surfaceAlt,
-                  color: ordenCliente === o.key ? '#fff' : C.tm,
-                  border: `0.5px solid ${ordenCliente === o.key ? C.accent : C.border}`,
-                  cursor: 'pointer',
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
+            Top 10 clientes por facturación neta · {anioFiltro === 'TODOS' ? 'histórico' : anioFiltro}
           </div>
         </div>
         {topClientes.map((c, i) => (
@@ -392,7 +432,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                 {c.cliente}
               </div>
               <div style={{ fontSize: 11, color: C.td }}>
-                {c.facturas} facturas · {Math.round(c.diasPromedio)}d promedio
+                {c.facturas} factura{c.facturas !== 1 ? 's' : ''}
               </div>
             </div>
             <div
@@ -476,13 +516,32 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                 </div>
                 <div
                   style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: C.text,
-                    fontFamily: 'monospace',
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
                   }}
                 >
-                  {f(r.montoReal)}
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: C.text,
+                      fontFamily: 'monospace',
+                    }}
+                  >
+                    {f(r.neto)}
+                  </div>
+                  {r.afecta && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: C.td,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      c/IVA {fS(r.montoReal)}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

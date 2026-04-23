@@ -1,13 +1,9 @@
 import { useMemo, useState } from 'react';
 import { f, fS, fd } from '../utils/format.js';
-import {
-  saldoActualBancos,
-  ingresoDiarioPromedio,
-  proyectar,
-} from '../utils/proyeccion.js';
+import { saldoActualBancos, proyectar } from '../utils/proyeccion.js';
 
 // Proyección visual del saldo bancario para los próximos 90 días.
-// Permite ajustar un multiplicador de ingresos para simular escenarios.
+// Todo en neto (sin IVA). Ingresos desfasados por plazo de cobro.
 export default function Proyeccion90d({
   C,
   bancos,
@@ -18,36 +14,42 @@ export default function Proyeccion90d({
   hoy,
   isMobile,
 }) {
-  const [escenario, setEscenario] = useState('base'); // base | conservador | optimista
-  const [umbralPct, setUmbralPct] = useState(20); // alerta si saldo < X% del inicial
+  const [escenario, setEscenario] = useState('base');
+  const [umbralPct, setUmbralPct] = useState(20);
+  const [plazoCobro, setPlazoCobro] = useState(30);
 
   const multiplicadores = { conservador: 0.7, base: 1.0, optimista: 1.3 };
 
   const proyeccion = useMemo(() => {
-    const saldoInicial = saldoActualBancos(bancos);
-    const promedioDiario = ingresoDiarioPromedio(ventas?.rows || [], 60, hoy);
-    const ingresoDiario = promedioDiario * multiplicadores[escenario];
-
-    // Facturas ya emitidas con fecha futura: las tratamos como ingresos seguros.
-    const ventasRowsFuturas = (ventas?.rows || []).filter((r) => r.fecha > hoy);
-
     return proyectar({
-      saldoInicial,
-      ingresoDiario,
-      ventasRowsFuturas,
+      saldoInicial: saldoActualBancos(bancos),
+      ventasRows: ventas?.rows || [],
       calendario,
       leasingDetalle,
       creditoPendiente,
       hoy,
       dias: 90,
+      plazoCobro,
+      multiplicadorIngresos: multiplicadores[escenario],
     });
-  }, [bancos, ventas, calendario, leasingDetalle, creditoPendiente, hoy, escenario]);
+  }, [bancos, ventas, calendario, leasingDetalle, creditoPendiente, hoy, escenario, plazoCobro]);
 
-  const { serie, saldoInicial, saldoFinal, saldoMin, primerCruceNegativo, ingresoDiario } =
-    proyeccion;
+  const {
+    serie,
+    saldoInicial,
+    saldoFinal,
+    saldoMin,
+    primerCruceNegativo,
+    totalIngConocidos,
+    totalIngEstimados,
+  } = proyeccion;
 
   const umbralAbsoluto = saldoInicial * (umbralPct / 100);
   const tocaUmbral = serie.find((d) => d.saldo < umbralAbsoluto && d.saldo >= 0);
+  const pctConocido =
+    totalIngConocidos + totalIngEstimados > 0
+      ? totalIngConocidos / (totalIngConocidos + totalIngEstimados)
+      : 0;
 
   // ─── Gráfico SVG ─────────────────────────────────────────────────────
   const W = 860,
@@ -75,7 +77,7 @@ export default function Proyeccion90d({
 
   const tieneEgresosGrandes = serie
     .map((d, i) => ({ ...d, i }))
-    .filter((d) => d.egreso > ingresoDiario * 3)
+    .filter((d) => d.egreso > proyeccion.promedioFallback * 3)
     .slice(0, 6);
 
   return (
@@ -107,13 +109,13 @@ export default function Proyeccion90d({
               marginBottom: 2,
             }}
           >
-            Proyección de saldo · próximos 90 días
+            Proyección de saldo · próximos 90 días (neto)
           </div>
           <div style={{ fontSize: 11, color: C.td }}>
-            Parte de {f(saldoInicial)} · promedio diario estimado: {fS(ingresoDiario)}
+            Parte de {f(saldoInicial)} · {Math.round(pctConocido * 100)}% de ingresos ya facturados
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {[
             { key: 'conservador', label: '-30%' },
             { key: 'base', label: 'Base' },
@@ -433,6 +435,26 @@ export default function Proyeccion90d({
         }}
       >
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Plazo de cobro:
+          <select
+            value={plazoCobro}
+            onChange={(e) => setPlazoCobro(Number(e.target.value))}
+            style={{
+              padding: '2px 6px',
+              borderRadius: 4,
+              fontSize: 10,
+              background: C.surfaceAlt,
+              color: C.text,
+              border: `0.5px solid ${C.border}`,
+            }}
+          >
+            <option value={30}>30 días</option>
+            <option value={45}>45 días</option>
+            <option value={60}>60 días</option>
+          </select>
+        </label>
+        <span style={{ color: C.border }}>·</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Umbral de alerta:
           <input
             type="range"
@@ -446,7 +468,10 @@ export default function Proyeccion90d({
           <span style={{ color: C.amberT, fontWeight: 600, minWidth: 30 }}>{umbralPct}%</span>
         </label>
         <span style={{ color: C.border }}>·</span>
-        <span>Ventas futuras ya facturadas se usan como ingreso seguro.</span>
+        <span>
+          Ingresos estimados con el mismo mes del año anterior; si no hay data, promedio últimos
+          60 días.
+        </span>
       </div>
     </div>
   );
