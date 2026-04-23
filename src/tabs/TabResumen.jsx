@@ -1,5 +1,6 @@
 import { f, fS, fd, fdf, dd, clas, colorTipo, mesLabel } from '../utils/format.js';
 import { GraficoCobertura, GraficoDonaDap } from '../components/Graficos.jsx';
+import { IndicadoresCard } from '../components/Indicadores.jsx';
 
 export default function TabResumen({
   C, bancos, dap, cal, ffmm,
@@ -187,6 +188,9 @@ export default function TabResumen({
             <span style={{ fontSize: 11, color: C.accent, fontWeight: 500 }}>Ver todas →</span>
           </div>
         )}
+
+        {/* Indicadores económicos (móvil) */}
+        <IndicadoresCard C={C}/>
 
         {/* Métricas DAP + FFMM 2x1 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -588,6 +592,11 @@ export default function TabResumen({
           )}
         </div>
       )}
+
+      {/* Indicadores económicos (desktop) */}
+      <div style={{ marginBottom: 12 }}>
+        <IndicadoresCard C={C}/>
+      </div>
 
       {/* Gráficos */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
