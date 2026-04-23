@@ -3,6 +3,8 @@ import {
   saldoActualBancos,
   ingresoDiarioPromedio,
   expandirLeasing,
+  estimarFacturacionDia,
+  ventasPorMes,
   proyectar,
 } from './proyeccion.js';
 
@@ -31,96 +33,138 @@ describe('saldoActualBancos', () => {
 });
 
 describe('ingresoDiarioPromedio', () => {
-  it('promedia por días de ventana, no por facturas', () => {
+  it('promedia por días de ventana usando neto', () => {
     const ventasRows = [
-      { fecha: '2026-04-01', montoReal: 3000 }, // hace 22 días
-      { fecha: '2026-04-15', montoReal: 6000 }, // hace 8 días
+      { fecha: '2026-04-01', neto: 3000 },
+      { fecha: '2026-04-15', neto: 6000 },
     ];
-    // ventana 30 días: (3000+6000)/30 = 300
     expect(ingresoDiarioPromedio(ventasRows, 30, '2026-04-23')).toBe(300);
   });
 
   it('excluye facturas fuera de la ventana', () => {
     const ventasRows = [
-      { fecha: '2026-01-01', montoReal: 100000 },
-      { fecha: '2026-04-15', montoReal: 3000 },
+      { fecha: '2026-01-01', neto: 100000 },
+      { fecha: '2026-04-15', neto: 3000 },
     ];
-    // ventana 30: solo la del 15/04 → 3000/30 = 100
     expect(ingresoDiarioPromedio(ventasRows, 30, '2026-04-23')).toBe(100);
   });
 });
 
-describe('expandirLeasing', () => {
-  it('expande cuotas al día de vencimiento de cada mes en el rango', () => {
-    const leasingDetalle = [
-      { diaVto: 5, cuotasPorPagar: 3, cuotaCLPcIVA: 1000000 },
+describe('ventasPorMes', () => {
+  it('agrupa por YYYY-MM sumando neto', () => {
+    const rows = [
+      { fecha: '2025-01-10', neto: 100 },
+      { fecha: '2025-01-20', neto: 200 },
+      { fecha: '2025-02-05', neto: 50 },
     ];
-    const fechas = [];
-    for (let i = 0; i < 93; i++) {
-      const d = new Date(2026, 3, 23);
-      d.setDate(d.getDate() + i);
-      fechas.push(d.toISOString().slice(0, 10));
-    }
-    const egresos = expandirLeasing(leasingDetalle, fechas);
-    // Abril-2026 día 5 ya pasó (hoy=23), no está en el rango
-    // Mayo-2026-05, Junio-2026-05, Julio-2026-05 sí están
-    expect(egresos['2026-05-05']).toBe(1000000);
-    expect(egresos['2026-06-05']).toBe(1000000);
+    const map = ventasPorMes(rows);
+    expect(map['2025-01']).toBe(300);
+    expect(map['2025-02']).toBe(50);
+  });
+});
+
+describe('estimarFacturacionDia', () => {
+  it('usa el mismo mes del año anterior distribuido por días del mes', () => {
+    // Abril tiene 30 días. Si año pasado en abril facturamos 300.000, un día abril es 10.000.
+    const ventasMes = { '2025-04': 300000 };
+    expect(estimarFacturacionDia('2026-04-15', ventasMes, 999)).toBe(10000);
   });
 
-  it('no agrega cuotas si el contrato ya no tiene cuotas por pagar', () => {
-    const leasingDetalle = [{ diaVto: 5, cuotasPorPagar: 0, cuotaCLPcIVA: 1000000 }];
-    const fechas = ['2026-05-05', '2026-06-05'];
-    expect(expandirLeasing(leasingDetalle, fechas)).toEqual({});
+  it('cae al fallback si no hay data del año pasado', () => {
+    expect(estimarFacturacionDia('2026-04-15', {}, 777)).toBe(777);
+  });
+});
+
+describe('expandirLeasing', () => {
+  it('usa cuotaCLPsIVA por defecto (sin IVA)', () => {
+    const leasingDetalle = [
+      { diaVto: 5, cuotasPorPagar: 3, cuotaCLPsIVA: 800000, cuotaCLPcIVA: 952000 },
+    ];
+    const fechas = ['2026-05-05', '2026-06-05', '2026-07-05'];
+    const egresos = expandirLeasing(leasingDetalle, fechas);
+    expect(egresos['2026-05-05']).toBe(800000);
+  });
+
+  it('permite forzar cuotaCLPcIVA si el caller lo pide', () => {
+    const leasingDetalle = [
+      { diaVto: 5, cuotasPorPagar: 3, cuotaCLPsIVA: 800000, cuotaCLPcIVA: 952000 },
+    ];
+    const fechas = ['2026-05-05'];
+    const egresos = expandirLeasing(leasingDetalle, fechas, 'cuotaCLPcIVA');
+    expect(egresos['2026-05-05']).toBe(952000);
+  });
+
+  it('respeta cuotasPorPagar como límite', () => {
+    const leasingDetalle = [{ diaVto: 5, cuotasPorPagar: 1, cuotaCLPsIVA: 100 }];
+    const fechas = ['2026-05-05', '2026-06-05', '2026-07-05'];
+    const egresos = expandirLeasing(leasingDetalle, fechas);
+    expect(egresos['2026-05-05']).toBe(100);
+    expect(egresos['2026-06-05']).toBeUndefined();
   });
 });
 
 describe('proyectar', () => {
-  it('suma saldo inicial + netos día a día', () => {
-    const r = proyectar({
-      saldoInicial: 1000000,
-      ingresoDiario: 10000,
-      calendario: [],
-      leasingDetalle: [],
-      creditoPendiente: [],
-      hoy: '2026-04-23',
-      dias: 3,
-    });
-    // día 0: saldo = 1000000 + 10000 = 1010000
-    // día 1: 1020000; día 2: 1030000
-    expect(r.serie[0].saldo).toBe(1010000);
-    expect(r.serie[2].saldo).toBe(1030000);
-    expect(r.saldoFinal).toBe(1030000);
-  });
-
-  it('marca saldo mínimo y primer cruce negativo', () => {
-    const r = proyectar({
-      saldoInicial: 50000,
-      ingresoDiario: 1000,
-      calendario: [{ fecha: '2026-04-25', monto: 500000 }],
-      leasingDetalle: [],
-      creditoPendiente: [],
-      hoy: '2026-04-23',
-      dias: 5,
-    });
-    expect(r.primerCruceNegativo).not.toBeNull();
-    expect(r.primerCruceNegativo.fecha).toBe('2026-04-25');
-    expect(r.saldoMin.saldo).toBeLessThan(0);
-  });
-
-  it('usa ingreso conocido cuando existe, y proyectado en otro caso', () => {
+  it('ingresos de los primeros 30 días son facturación real de los últimos 30 días', () => {
+    const ventasRows = [
+      { fecha: '2026-03-25', neto: 1000000 }, // se cobra 2026-04-24
+      { fecha: '2026-04-10', neto: 2000000 }, // se cobra 2026-05-10
+    ];
     const r = proyectar({
       saldoInicial: 0,
-      ingresoDiario: 1000,
-      ventasRowsFuturas: [{ fecha: '2026-04-24', montoReal: 999999 }],
+      ventasRows,
       hoy: '2026-04-23',
-      dias: 3,
+      dias: 30,
+      plazoCobro: 30,
     });
-    // Día 0 (23): sin ingreso conocido → 1000
-    // Día 1 (24): con ingreso conocido → 999999 (no se suma el 1000 encima)
-    // Día 2 (25): sin ingreso conocido → 1000
-    expect(r.serie[0].ingreso).toBe(1000);
-    expect(r.serie[1].ingreso).toBe(999999);
-    expect(r.serie[2].ingreso).toBe(1000);
+    const dia24Abril = r.serie.find((d) => d.fecha === '2026-04-24');
+    expect(dia24Abril.tipoIngreso).toBe('real');
+    expect(dia24Abril.ingreso).toBe(1000000);
+  });
+
+  it('ingresos lejanos usan estacionalidad del año pasado', () => {
+    // Julio 2025 facturó 300k. Con plazoCobro 30, el cobro cae ~agosto 2025.
+    // Para estimar un día de agosto-2026, la fecha de facturación será julio-2026,
+    // que consulta julio-2025 → 300k / 31 días del mes.
+    const ventasRows = [
+      { fecha: '2025-07-15', neto: 300000 },
+    ];
+    const r = proyectar({
+      saldoInicial: 0,
+      ventasRows,
+      hoy: '2026-04-23',
+      dias: 180,
+      plazoCobro: 30,
+    });
+    const diaAgosto = r.serie.find((d) => d.fecha.startsWith('2026-08'));
+    expect(diaAgosto.tipoIngreso).toBe('estimado');
+    expect(diaAgosto.ingreso).toBeCloseTo(300000 / 31, 0);
+  });
+
+  it('multiplicador aplica escenarios', () => {
+    const ventasRows = [{ fecha: '2026-03-25', neto: 1000000 }];
+    const r = proyectar({
+      saldoInicial: 0,
+      ventasRows,
+      hoy: '2026-04-23',
+      dias: 30,
+      plazoCobro: 30,
+      multiplicadorIngresos: 0.5,
+    });
+    const dia24Abril = r.serie.find((d) => d.fecha === '2026-04-24');
+    expect(dia24Abril.ingreso).toBe(500000);
+  });
+
+  it('saldo acumula día a día y marca mínimo', () => {
+    const r = proyectar({
+      saldoInicial: 100000,
+      ventasRows: [],
+      calendario: [{ fecha: '2026-04-25', monto: 200000 }],
+      hoy: '2026-04-23',
+      dias: 5,
+      plazoCobro: 30,
+    });
+    const dia25 = r.serie.find((d) => d.fecha === '2026-04-25');
+    expect(dia25.saldo).toBe(-100000);
+    expect(r.primerCruceNegativo.fecha).toBe('2026-04-25');
   });
 });
