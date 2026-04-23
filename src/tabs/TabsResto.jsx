@@ -1171,7 +1171,7 @@ export function TabCalc({ C, isMobile }) {
           Calculadora rápida
         </div>
         <div style={{ fontSize: 11, color: C.td, marginBottom: 12 }}>
-          Soporta +, -, *, / · "M" = millones · "MM" = miles de millones · Ej: 500M+300M, 1.5MM*2
+          {'Soporta +, -, *, / · "M" = millones · "MM" = miles de millones · Ej: 500M+300M, 1.5MM*2'}
         </div>
         {lines.map((l, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
