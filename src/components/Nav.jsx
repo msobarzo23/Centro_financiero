@@ -2,11 +2,12 @@ import { useState } from 'react';
 
 // Agrupación: las 4 principales van al bottom nav; el resto cae en "Más".
 const PRINCIPALES = ["Resumen", "Bancos", "Calendario", "Alertas"];
-const SECUNDARIAS = ["Flujo de Caja", "Inversiones", "Fondos Mutuos", "Leasing", "Crédito", "Calculadora"];
+const SECUNDARIAS = ["Ventas", "Flujo de Caja", "Inversiones", "Fondos Mutuos", "Leasing", "Crédito", "Calculadora"];
 
-export const TABS = [...PRINCIPALES.slice(0, 1), ...["Bancos", "Calendario"], ...SECUNDARIAS.slice(0, 2), "Fondos Mutuos", "Leasing", "Crédito", "Alertas", "Calculadora"];
-// Orden canónico (mismo que el App original):
-export const ALL_TABS = ["Resumen", "Bancos", "Calendario", "Flujo de Caja", "Inversiones", "Fondos Mutuos", "Leasing", "Crédito", "Alertas", "Calculadora"];
+export const TABS = [...PRINCIPALES.slice(0, 1), ...["Bancos", "Calendario"], ...SECUNDARIAS.slice(0, 3), "Fondos Mutuos", "Leasing", "Crédito", "Alertas", "Calculadora"];
+// Orden canónico de pestañas. El índice en este arreglo coincide con el case
+// del switch en App.jsx; si agregas o mueves pestañas, actualiza ambos lados.
+export const ALL_TABS = ["Resumen", "Bancos", "Calendario", "Ventas", "Flujo de Caja", "Inversiones", "Fondos Mutuos", "Leasing", "Crédito", "Alertas", "Calculadora"];
 
 export function DesktopTabs({ tab, setTab, C, nAlertas }) {
   return (
@@ -49,9 +50,9 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
     { label: "Resumen", idx: 0, icon: "▤" },
     { label: "Bancos", idx: 1, icon: "▣" },
     { label: "Calendario", idx: 2, icon: "▦" },
-    { label: "Alertas", idx: 8, icon: "!" },
+    { label: "Alertas", idx: 9, icon: "!" },
   ];
-  const secundariasIdx = [3, 4, 5, 6, 7, 9];
+  const secundariasIdx = [3, 4, 5, 6, 7, 8, 10];
   const secLabels = secundariasIdx.map(i => ({ label: ALL_TABS[i], idx: i }));
 
   return (
@@ -116,7 +117,7 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
       }}>
         {principales.map(({ label, idx, icon }) => {
           const active = tab === idx;
-          const esAlerta = idx === 8;
+          const esAlerta = idx === 9;
           return (
             <button key={label} onClick={() => setTab(idx)}
               style={{

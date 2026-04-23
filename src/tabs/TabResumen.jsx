@@ -138,7 +138,7 @@ export default function TabResumen({
           const col = colorAlerta(a.tipo);
           return (
             <div
-              onClick={() => onGoTab && onGoTab(8)}
+              onClick={() => onGoTab && onGoTab(9)}
               style={{
                 background: col.bg, border: `0.5px solid ${col.border}`,
                 borderRadius: 10, padding: "12px 14px",
@@ -175,7 +175,7 @@ export default function TabResumen({
 
         {alertas.length > 1 && (
           <div
-            onClick={() => onGoTab && onGoTab(8)}
+            onClick={() => onGoTab && onGoTab(9)}
             style={{
               padding: "8px 14px", borderRadius: 8,
               background: C.surfaceAlt,
@@ -191,7 +191,7 @@ export default function TabResumen({
         {/* Métricas DAP + FFMM 2x1 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <div
-            onClick={() => onGoTab && onGoTab(4)}
+            onClick={() => onGoTab && onGoTab(5)}
             style={{
               background: C.surface, borderRadius: 10,
               padding: "12px 14px", border: `0.5px solid ${C.border}`,
@@ -209,7 +209,7 @@ export default function TabResumen({
             </div>
           </div>
           <div
-            onClick={() => onGoTab && onGoTab(5)}
+            onClick={() => onGoTab && onGoTab(6)}
             style={{
               background: C.surface, borderRadius: 10,
               padding: "12px 14px", border: `0.5px solid ${C.border}`,
@@ -351,7 +351,7 @@ export default function TabResumen({
         {/* Próximos DAPs a vencer (secundario) */}
         {proxDAP.length > 0 && (
           <div
-            onClick={() => onGoTab && onGoTab(4)}
+            onClick={() => onGoTab && onGoTab(5)}
             style={{
               background: C.surface, borderRadius: 10,
               padding: "14px 16px", border: `0.5px solid ${C.border}`,
