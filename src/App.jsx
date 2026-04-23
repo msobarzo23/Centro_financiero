@@ -216,6 +216,7 @@ export default function App() {
         return (
           <TabFlujoCaja
             {...commonProps}
+            bancos={bancos}
             ventas={ventas}
             calendario={cal}
             leasingDetalle={leasingDetalle}

@@ -4,6 +4,7 @@ import {
   mesLabel, mesLabelLargo,
 } from '../utils/format.js';
 import { Metric } from '../components/common.jsx';
+import Proyeccion90d from '../components/Proyeccion90d.jsx';
 
 // ─── CALENDARIO ──────────────────────────────────────────────────────────────
 export function TabCalendario({ C, cal, isMobile, hoy }) {
@@ -104,7 +105,7 @@ export function TabCalendario({ C, cal, isMobile, hoy }) {
 }
 
 // ─── FLUJO DE CAJA ───────────────────────────────────────────────────────────
-export function TabFlujoCaja({ C, ventas, calendario, leasingDetalle, creditoPendiente, isMobile, hoy }) {
+export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, creditoPendiente, isMobile, hoy }) {
   const [vista, setVista] = useState('12m');
   const hoyD = new Date(hoy + "T12:00:00");
 
@@ -288,6 +289,17 @@ export function TabFlujoCaja({ C, ventas, calendario, leasingDetalle, creditoPen
 
   return (
     <div>
+      <Proyeccion90d
+        C={C}
+        bancos={bancos}
+        ventas={ventas}
+        calendario={calendario}
+        leasingDetalle={leasingDetalle}
+        creditoPendiente={creditoPendiente}
+        hoy={hoy}
+        isMobile={isMobile}
+      />
+
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         <Metric C={C} label={`Ingresos ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
           value={ingresoMesAct > 0 ? f(ingresoMesAct) : "Sin datos"} sub="Facturado c/IVA" color={C.green}/>
