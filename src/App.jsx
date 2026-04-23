@@ -9,6 +9,7 @@ import { Loading } from './components/common.jsx';
 import { DesktopTabs, MobileBottomNav, ALL_TABS } from './components/Nav.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { ToastStack } from './components/Toast.jsx';
+import { IndicadoresBadge } from './components/Indicadores.jsx';
 
 import TabResumen from './tabs/TabResumen.jsx';
 import TabBancos from './tabs/TabBancos.jsx';
@@ -309,6 +310,7 @@ export default function App() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {!isMobile && <IndicadoresBadge C={C} />}
           {ultimaAct && (
             <span style={{ fontSize: 10, color: C.td, marginRight: 6 }}>
               {minutosDesdeActualizacion === 0
