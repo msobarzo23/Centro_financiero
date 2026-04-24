@@ -424,13 +424,13 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
         <Metric C={C}
           label={`Ingresos ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
           value={ingresoMesAct > 0 ? f(ingresoMesAct) : "Sin datos"}
-          sub="Neto facturado" color={C.green} />
+          sub="Facturación con IVA" color={C.green} />
         <Metric C={C} label="Egresos comprometidos"
-          value={f(egresoMesAct)} sub="Cal + leasing s/IVA + crédito" color={C.red} />
-        <Metric C={C} label="Resultado neto"
+          value={f(egresoMesAct)} sub="Calendario + leasing + crédito (con IVA)" color={C.red} />
+        <Metric C={C} label="Balance del mes"
           value={f(netoMesAct)} sub="Ingreso − egreso" color={netoMesAct >= 0 ? C.green : C.red} />
         <Metric C={C} label="Promedio ingreso/mes"
-          value={f(promedioIngMensual)} sub="Neto · meses con ventas (hasta 14m)" color={C.accent} />
+          value={f(promedioIngMensual)} sub="Con IVA · meses con ventas (hasta 14m)" color={C.accent} />
       </div>
 
       <div
@@ -477,7 +477,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
           }}
         >
           <Eyebrow C={C} style={{ marginBottom: 0 }}>
-            {vista === '30d' ? 'Ingresos vs egresos' : 'Ingresos vs egresos · línea = neto acumulado'}
+            {vista === '30d' ? 'Ingresos vs egresos (con IVA)' : 'Ingresos vs egresos · línea = balance acumulado (con IVA)'}
           </Eyebrow>
           <div style={{ display: "flex", gap: SP.md }}>
             <div style={{ display: "flex", alignItems: "center", gap: SP.xs, fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
@@ -488,7 +488,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
             </div>
             {vista === '12m' && (
               <div style={{ display: "flex", alignItems: "center", gap: SP.xs, fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
-                <div style={{ width: 20, height: 2, background: C.amber, borderRadius: 1 }} /> Neto acum.
+                <div style={{ width: 20, height: 2, background: C.amber, borderRadius: 1 }} /> Balance acum.
               </div>
             )}
           </div>
@@ -505,7 +505,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: S.base }}>
               <thead>
                 <tr>
-                  {["Mes", "Ingresos", "Egresos", "Neto", "Neto acum.", "Facturas"].map(h => (
+                  {["Mes", "Ingresos", "Egresos", "Balance", "Balance acum.", "Facturas"].map(h => (
                     <th key={h} style={{ ...thStyle(C), borderBottom: `1px solid ${C.borderL}` }}>{h}</th>
                   ))}
                 </tr>

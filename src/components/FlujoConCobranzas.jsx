@@ -93,7 +93,7 @@ export default function FlujoConCobranzas({ C, isMobile, flujo }) {
         />
       </div>
 
-      {/* ── Flujo neto (destaque) ─────────────────────── */}
+      {/* ── Balance (destaque) ─────────────────────── */}
       <Card C={C} pad="md">
         <div
           style={{
@@ -105,7 +105,7 @@ export default function FlujoConCobranzas({ C, isMobile, flujo }) {
           }}
         >
           <div>
-            <Eyebrow C={C}>Flujo neto 90 días</Eyebrow>
+            <Eyebrow C={C}>Balance 90 días (con IVA)</Eyebrow>
             <div
               style={{
                 ...TABULAR,
@@ -357,8 +357,8 @@ function RescatePill({ C, plan }) {
 
 function TablaSemanas({ C, semanas, rescate, isMobile }) {
   const headers = isMobile
-    ? ['Sem', 'Período', 'Neto', 'Caja final', 'Estado']
-    : ['Sem', 'Período', 'Caja inicial', 'Ingresos', 'Egresos', 'Neto', 'Caja final', 'Estado'];
+    ? ['Sem', 'Período', 'Balance', 'Caja final', 'Estado']
+    : ['Sem', 'Período', 'Caja inicial', 'Ingresos', 'Egresos', 'Balance', 'Caja final', 'Estado'];
 
   return (
     <div style={{ overflowX: 'auto' }}>
