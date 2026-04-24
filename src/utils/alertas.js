@@ -12,11 +12,9 @@ export function buildAlertas({ dap, cal, leasingDetalle, creditoPendiente }, hoy
   dapsV.forEach(d => {
     const dias = diasHasta(d.vencimiento);
     if (dias >= 0 && dias <= 7) {
-      const monto = d.montoInicial >= 1e9
-        ? `$${(d.montoInicial/1e9).toFixed(1)}MM`
-        : d.montoInicial >= 1e6
-          ? `$${Math.round(d.montoInicial/1e6)}M`
-          : `$${Math.round(d.montoInicial).toLocaleString("es-CL")}`;
+      const monto = d.montoInicial >= 1e6
+        ? `$${Math.round(d.montoInicial/1e6).toLocaleString("es-CL")} M`
+        : `$${Math.round(d.montoInicial).toLocaleString("es-CL")}`;
       const label = d.comentario || `DAP ${d.banco}`;
       const tipo = dias <= 2 ? "urgente" : dias <= 5 ? "atencion" : "info";
       alertas.push({

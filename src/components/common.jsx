@@ -1,65 +1,124 @@
 // Componentes UI compartidos entre pestañas.
+import { S, W, R, SP, eyebrow, bigNumber, cardStyle } from '../utils/theme.js';
 
-export function Metric({ label, value, sub, color, C, size = 'normal' }) {
+// Card: contenedor unificado. Usa en vez de <div style={{background: C.surface, ...}}>.
+export function Card({ C, pad = "md", elevated = false, onClick, children, style }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        ...cardStyle(C, { pad, elevated }),
+        cursor: onClick ? "pointer" : "default",
+        ...(style || {}),
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Etiqueta superior (uppercase) de cards de métrica.
+export function Eyebrow({ C, children, style }) {
+  return (
+    <div style={{ ...eyebrow(C), marginBottom: SP.sm, ...(style || {}) }}>
+      {children}
+    </div>
+  );
+}
+
+// Título de sección grande (ej: "Saldos por banco").
+export function SectionTitle({ C, children, right }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        marginBottom: SP.md,
+      }}
+    >
+      <div style={{ fontSize: S.lg, fontWeight: W.sb, color: C.text, letterSpacing: "-0.2px" }}>
+        {children}
+      </div>
+      {right && <div>{right}</div>}
+    </div>
+  );
+}
+
+export function Metric({ label, value, sub, color, C, size = 'normal', onClick }) {
   const big = size === 'big';
   return (
-    <div style={{
-      background: C.surface,
-      borderRadius: 10,
-      padding: big ? "18px 20px" : "14px 16px",
-      border: `0.5px solid ${C.border}`,
-      flex: 1,
-      minWidth: big ? 200 : 130,
-    }}>
-      <div style={{
-        fontSize: 11, color: C.tm, marginBottom: big ? 6 : 4,
-        textTransform: "uppercase", letterSpacing: "0.5px",
-      }}>{label}</div>
-      <div style={{
-        fontSize: big ? 28 : 22, fontWeight: 600, color: color || C.accent,
-        lineHeight: 1.2, fontFamily: big ? "monospace" : "inherit",
-        letterSpacing: big ? "-0.5px" : "0",
-      }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.td, marginTop: 3 }}>{sub}</div>}
+    <div
+      onClick={onClick}
+      style={{
+        ...cardStyle(C, { pad: big ? "lg" : "md" }),
+        flex: 1,
+        minWidth: big ? 220 : 150,
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      <Eyebrow C={C}>{label}</Eyebrow>
+      <div style={bigNumber(C, color || C.accent)}>{value}</div>
+      {sub && (
+        <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
 export function Loading({ C }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "60px 20px", flexDirection: "column", gap: 12,
-    }}>
-      <div style={{
-        width: 40, height: 40,
-        border: `3px solid ${C.border}`,
-        borderTop: `3px solid ${C.accent}`,
-        borderRadius: "50%",
-        animation: "spin 1s linear infinite",
-      }} />
-      <div style={{ fontSize: 13, color: C.tm }}>Cargando datos desde Google Sheets...</div>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: `${SP.xl3 * 2}px ${SP.xl}px`,
+        flexDirection: "column",
+        gap: SP.md,
+      }}
+    >
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          border: `3px solid ${C.border}`,
+          borderTop: `3px solid ${C.accent}`,
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite",
+        }}
+      />
+      <div style={{ fontSize: S.base, color: C.tm, fontWeight: W.m }}>
+        Cargando datos desde Google Sheets…
+      </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
 
-// Skeleton para mostrar estructura mientras carga (sensación de rapidez).
+// Skeleton para estructura mientras carga.
 export function SkeletonCard({ C, height = 80 }) {
   return (
-    <div style={{
-      background: C.surface,
-      borderRadius: 10,
-      height,
-      border: `0.5px solid ${C.border}`,
-      position: "relative",
-      overflow: "hidden",
-    }}>
-      <div style={{
-        position: "absolute", inset: 0,
-        background: `linear-gradient(90deg, transparent, ${C.surfaceAlt}, transparent)`,
-        animation: "shimmer 1.8s infinite",
-      }}/>
+    <div
+      style={{
+        background: C.surface,
+        borderRadius: R.lg,
+        height,
+        border: `1px solid ${C.border}`,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `linear-gradient(90deg, transparent, ${C.surfaceAlt}, transparent)`,
+          animation: "shimmer 1.8s infinite",
+        }}
+      />
       <style>{`@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}`}</style>
     </div>
   );

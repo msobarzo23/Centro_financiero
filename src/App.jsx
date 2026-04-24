@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from './data.js';
-import { T } from './utils/theme.js';
+import { T, S, W, R, SP, FONT_STACK } from './utils/theme.js';
 import { buildAlertas } from './utils/alertas.js';
 import { useIsMobile } from './utils/useMediaQuery.js';
 
@@ -107,8 +107,11 @@ export default function App() {
     document.body.style.background = C.bg;
     document.body.style.color = C.text;
     document.body.style.margin = '0';
-    document.body.style.fontFamily =
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    document.body.style.fontFamily = FONT_STACK;
+    document.body.style.fontFeatureSettings = "'cv11' 1, 'ss01' 1";
+    document.body.style.textRendering = 'optimizeLegibility';
+    document.body.style.webkitFontSmoothing = 'antialiased';
+    document.body.style.MozOsxFontSmoothing = 'grayscale';
     document.documentElement.style.background = C.bg;
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', C.bg);
@@ -140,27 +143,29 @@ export default function App() {
         <div
           style={{
             background: C.surface,
-            borderRadius: 10,
-            padding: 24,
-            border: `0.5px solid ${C.red}55`,
+            borderRadius: R.lg,
+            padding: SP.xl2,
+            border: `1px solid ${C.red}55`,
             maxWidth: 420,
+            boxShadow: C.shadow,
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 600, color: C.red, marginBottom: 8 }}>
+          <div style={{ fontSize: S.lg, fontWeight: W.sb, color: C.red, marginBottom: SP.sm, letterSpacing: "-0.2px" }}>
             Error al cargar datos
           </div>
-          <div style={{ fontSize: 13, color: C.tm, marginBottom: 14 }}>
+          <div style={{ fontSize: S.base, color: C.tm, marginBottom: SP.lg, lineHeight: 1.5 }}>
             {error.message || 'Revisa tu conexión'}
           </div>
           <button
             onClick={() => refetch()}
             style={{
-              padding: '8px 16px',
-              borderRadius: 6,
+              padding: `${SP.sm}px ${SP.lg}px`,
+              borderRadius: R.md,
               background: C.accent,
               color: '#fff',
               border: 'none',
-              fontSize: 13,
+              fontSize: S.base,
+              fontWeight: W.sb,
               cursor: 'pointer',
             }}
           >
@@ -265,9 +270,10 @@ export default function App() {
         <div
           style={{
             background: C.amberD,
-            borderBottom: `0.5px solid ${C.amber}44`,
-            padding: '8px 16px',
-            fontSize: 12,
+            borderBottom: `1px solid ${C.amber}44`,
+            padding: `${SP.sm}px ${SP.lg}px`,
+            fontSize: S.sm,
+            fontWeight: W.m,
             color: C.amberT,
             textAlign: 'center',
           }}
@@ -279,41 +285,65 @@ export default function App() {
       <div
         style={{
           background: C.surface,
-          borderBottom: `0.5px solid ${C.border}`,
-          padding: isMobile ? '10px 16px' : '14px 20px',
+          borderBottom: `1px solid ${C.border}`,
+          padding: isMobile ? `${SP.md}px ${SP.lg}px` : `${SP.lg}px ${SP.xl}px`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 10,
+          gap: SP.md,
           position: 'sticky',
           top: 0,
           zIndex: 20,
-          paddingTop: isMobile ? 'calc(10px + env(safe-area-inset-top))' : '14px',
+          paddingTop: isMobile
+            ? `calc(${SP.md}px + env(safe-area-inset-top))`
+            : `${SP.lg}px`,
         }}
       >
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: SP.md }}>
           <div
             style={{
-              fontSize: isMobile ? 14 : 16,
-              fontWeight: 600,
-              color: C.text,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              width: 34,
+              height: 34,
+              borderRadius: R.md,
+              background: `linear-gradient(135deg, ${C.accent}, ${C.teal})`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: S.md,
+              fontWeight: W.b,
+              letterSpacing: '-0.5px',
+              flexShrink: 0,
             }}
           >
-            {isMobile ? 'CMF · TBello' : 'Centro de Mando Financiero'}
+            TB
           </div>
-          {!isMobile && (
-            <div style={{ fontSize: 11, color: C.tm, marginTop: 2 }}>
-              Transportes Bello e Hijos Ltda. · {ALL_TABS[tab]}
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: isMobile ? S.md : S.lg,
+                fontWeight: W.sb,
+                color: C.text,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                letterSpacing: '-0.3px',
+                lineHeight: 1.2,
+              }}
+            >
+              {isMobile ? 'CMF · TBello' : 'Centro de Mando Financiero'}
             </div>
-          )}
+            {!isMobile && (
+              <div style={{ fontSize: S.xs, color: C.tm, marginTop: 2, fontWeight: W.m }}>
+                Transportes Bello e Hijos Ltda. · {ALL_TABS[tab]}
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, flexShrink: 0 }}>
           {!isMobile && <IndicadoresBadge C={C} />}
           {ultimaAct && (
-            <span style={{ fontSize: 10, color: C.td, marginRight: 6 }}>
+            <span style={{ fontSize: S.xs, color: C.td, marginRight: SP.xs, fontWeight: W.m }}>
               {minutosDesdeActualizacion === 0
                 ? 'Ahora'
                 : minutosDesdeActualizacion < 60
@@ -326,14 +356,19 @@ export default function App() {
             disabled={isFetching}
             title="Refrescar"
             style={{
-              padding: '6px 10px',
-              borderRadius: 6,
-              fontSize: 12,
+              width: 34,
+              height: 34,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: R.md,
+              fontSize: S.md,
               background: C.surfaceAlt,
               color: isFetching ? C.td : C.tm,
-              border: `0.5px solid ${C.border}`,
+              border: `1px solid ${C.border}`,
               cursor: isFetching ? 'wait' : 'pointer',
               opacity: isFetching ? 0.6 : 1,
+              transition: 'background 120ms ease',
             }}
           >
             <span
@@ -349,13 +384,18 @@ export default function App() {
             onClick={toggleTema}
             title={tema === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
             style={{
-              padding: '6px 10px',
-              borderRadius: 6,
-              fontSize: 12,
+              width: 34,
+              height: 34,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: R.md,
+              fontSize: S.md,
               background: C.surfaceAlt,
               color: C.tm,
-              border: `0.5px solid ${C.border}`,
+              border: `1px solid ${C.border}`,
               cursor: 'pointer',
+              transition: 'background 120ms ease',
             }}
           >
             {tema === 'dark' ? '☀' : '☾'}
@@ -367,8 +407,8 @@ export default function App() {
 
       <div
         style={{
-          padding: isMobile ? '12px 12px 0' : '18px 20px',
-          paddingBottom: isMobile ? '84px' : '40px',
+          padding: isMobile ? `${SP.md}px ${SP.md}px 0` : `${SP.xl2}px ${SP.xl2}px`,
+          paddingBottom: isMobile ? '92px' : `${SP.xl3}px`,
           maxWidth: 1400,
           margin: '0 auto',
         }}

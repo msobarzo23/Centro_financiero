@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { S, W, R, SP } from '../utils/theme.js';
 
 // Toasts apilados en la esquina inferior derecha. Autodescartan a los 6s.
 export function ToastStack({ toasts, onDismiss, C }) {
@@ -7,11 +8,11 @@ export function ToastStack({ toasts, onDismiss, C }) {
     <div
       style={{
         position: 'fixed',
-        right: 16,
-        bottom: 'calc(16px + env(safe-area-inset-bottom))',
+        right: SP.lg,
+        bottom: `calc(${SP.lg}px + env(safe-area-inset-bottom))`,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: SP.sm,
         zIndex: 60,
         maxWidth: 'calc(100vw - 32px)',
         pointerEvents: 'none',
@@ -43,21 +44,25 @@ function Toast({ toast, onDismiss, C }) {
       onClick={() => onDismiss(toast.id)}
       style={{
         background: C.surface,
-        border: `0.5px solid ${col.border}55`,
+        border: `1px solid ${col.border}55`,
         borderLeft: `3px solid ${col.border}`,
-        borderRadius: 8,
-        padding: '10px 14px',
-        fontSize: 12,
+        borderRadius: R.md,
+        padding: `${SP.md}px ${SP.lg}px`,
+        fontSize: S.sm,
         color: C.text,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
         cursor: 'pointer',
-        minWidth: 260,
-        maxWidth: 360,
+        minWidth: 280,
+        maxWidth: 380,
         pointerEvents: 'auto',
       }}
     >
-      <div style={{ fontWeight: 600, color: col.text, marginBottom: 2 }}>{toast.titulo}</div>
-      {toast.mensaje && <div style={{ color: C.tm, lineHeight: 1.4 }}>{toast.mensaje}</div>}
+      <div style={{ fontWeight: W.sb, color: col.text, marginBottom: 2, fontSize: S.base }}>
+        {toast.titulo}
+      </div>
+      {toast.mensaje && (
+        <div style={{ color: C.tm, lineHeight: 1.5, fontWeight: W.m }}>{toast.mensaje}</div>
+      )}
     </div>
   );
 }
