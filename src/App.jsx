@@ -15,6 +15,7 @@ import TabResumen from './tabs/TabResumen.jsx';
 import TabBancos from './tabs/TabBancos.jsx';
 import TabVentas from './tabs/TabVentas.jsx';
 import TabCobranzas from './tabs/TabCobranzas.jsx';
+import TabClientes360 from './tabs/TabClientes360.jsx';
 import {
   TabCalendario,
   TabFlujoCaja,
@@ -270,6 +271,14 @@ export default function App() {
             uploading={defontana.uploading}
             uploadSaldos={defontana.uploadSaldos}
             clearSaldos={defontana.clearSaldos}
+          />
+        );
+      case 12:
+        return (
+          <TabClientes360
+            {...commonProps}
+            ventas={ventas}
+            defontana={defontana}
           />
         );
       default:
