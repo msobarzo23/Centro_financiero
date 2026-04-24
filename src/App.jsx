@@ -14,6 +14,7 @@ import { IndicadoresBadge } from './components/Indicadores.jsx';
 import TabResumen from './tabs/TabResumen.jsx';
 import TabBancos from './tabs/TabBancos.jsx';
 import TabVentas from './tabs/TabVentas.jsx';
+import TabCobranzas from './tabs/TabCobranzas.jsx';
 import {
   TabCalendario,
   TabFlujoCaja,
@@ -24,6 +25,7 @@ import {
   TabAlertas,
   TabCalc,
 } from './tabs/TabsResto.jsx';
+import { useDefontana } from './hooks/useDefontana.js';
 
 const TEMA_KEY = 'cmf_tbello_tema';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -41,6 +43,9 @@ export default function App() {
     queryKey: ['allData'],
     queryFn: fetchData,
   });
+
+  // Datos Defontana (ingesta local de XLSX, no pasa por react-query).
+  const defontana = useDefontana();
 
   const pushToast = useCallback((toast) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -253,6 +258,17 @@ export default function App() {
         return <TabAlertas {...commonProps} alertas={alertas} />;
       case 10:
         return <TabCalc {...commonProps} />;
+      case 11:
+        return (
+          <TabCobranzas
+            {...commonProps}
+            saldosRaw={defontana.saldosRaw}
+            cobranzas={defontana.cobranzas}
+            uploading={defontana.uploading}
+            uploadSaldos={defontana.uploadSaldos}
+            clearSaldos={defontana.clearSaldos}
+          />
+        );
       default:
         return null;
     }
