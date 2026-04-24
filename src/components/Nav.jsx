@@ -1,5 +1,21 @@
 import { useState } from 'react';
-import { S, W, R, SP } from '../utils/theme.js';
+import {
+  LayoutDashboard,
+  Landmark,
+  Calendar,
+  ShoppingCart,
+  Wallet,
+  TrendingUp,
+  PiggyBank,
+  Truck,
+  CreditCard,
+  AlertTriangle,
+  Calculator,
+  Receipt,
+  Users,
+  MoreHorizontal,
+} from 'lucide-react';
+import { S, W, R, SP, FONT_BODY } from '../utils/theme.js';
 
 // Orden canónico de pestañas. El índice coincide con el case en App.jsx;
 // si agregas o mueves pestañas, actualiza ambos lados.
@@ -9,9 +25,27 @@ export const ALL_TABS = [
   "Cobranzas", "Clientes 360",
 ];
 
+// Icono por índice de tab (Lucide). Mantener sincronizado con ALL_TABS.
+const TAB_ICONS = [
+  LayoutDashboard, // 0 Resumen
+  Landmark,        // 1 Bancos
+  Calendar,        // 2 Calendario
+  ShoppingCart,    // 3 Ventas
+  Wallet,          // 4 Flujo de Caja
+  TrendingUp,      // 5 Inversiones
+  PiggyBank,       // 6 Fondos Mutuos
+  Truck,           // 7 Leasing
+  CreditCard,      // 8 Crédito
+  AlertTriangle,   // 9 Alertas
+  Calculator,      // 10 Calculadora
+  Receipt,         // 11 Cobranzas
+  Users,           // 12 Clientes 360
+];
+
 export function DesktopTabs({ tab, setTab, C, nAlertas }) {
   return (
     <div
+      className="scrollbar-hide"
       style={{
         display: "flex",
         gap: 0,
@@ -19,11 +53,13 @@ export function DesktopTabs({ tab, setTab, C, nAlertas }) {
         borderBottom: `1px solid ${C.border}`,
         background: C.surface,
         overflowX: "auto",
+        fontFamily: FONT_BODY,
       }}
     >
       {ALL_TABS.map((t, i) => {
         const active = tab === i;
         const esAlertas = t === "Alertas";
+        const Icon = TAB_ICONS[i] || LayoutDashboard;
         return (
           <button
             key={t}
@@ -35,27 +71,37 @@ export function DesktopTabs({ tab, setTab, C, nAlertas }) {
               color: active ? C.accent : C.tm,
               background: "none",
               border: "none",
-              borderBottom: active ? `2px solid ${C.accent}` : "2px solid transparent",
+              borderBottom: active ? `3px solid ${C.accent}` : "3px solid transparent",
               cursor: "pointer",
               whiteSpace: "nowrap",
               position: "relative",
-              transition: "color 120ms ease",
+              transition: "color 200ms ease, background 200ms ease",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: SP.xs + 2,
+              fontFamily: FONT_BODY,
+            }}
+            onMouseEnter={(e) => {
+              if (!active) e.currentTarget.style.background = C.accentD;
+            }}
+            onMouseLeave={(e) => {
+              if (!active) e.currentTarget.style.background = "none";
             }}
           >
+            <Icon size={16} strokeWidth={active ? 2.5 : 2} />
             {t}
             {esAlertas && nAlertas > 0 && (
               <span
                 style={{
-                  position: "absolute",
-                  top: 6,
-                  right: -2,
+                  marginLeft: 2,
                   background: C.red,
                   color: "#fff",
-                  borderRadius: 10,
+                  borderRadius: 999,
                   fontSize: S.xxs,
                   fontWeight: W.b,
-                  padding: "1px 6px",
-                  lineHeight: 1.4,
+                  padding: "2px 7px",
+                  lineHeight: 1.2,
+                  fontFamily: FONT_BODY,
                 }}
               >
                 {nAlertas}
@@ -73,12 +119,12 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
   const [showMas, setShowMas] = useState(false);
 
   const principales = [
-    { label: "Resumen", idx: 0, icon: "▤" },
-    { label: "Bancos", idx: 1, icon: "▣" },
-    { label: "Calendario", idx: 2, icon: "▦" },
-    { label: "Alertas", idx: 9, icon: "!" },
+    { label: "Resumen", idx: 0 },
+    { label: "Bancos", idx: 1 },
+    { label: "Ventas", idx: 3 },
+    { label: "Alertas", idx: 9 },
   ];
-  const secundariasIdx = [3, 4, 5, 6, 7, 8, 10, 11, 12];
+  const secundariasIdx = [2, 4, 5, 6, 7, 8, 10, 11, 12];
   const secLabels = secundariasIdx.map(i => ({ label: ALL_TABS[i], idx: i }));
 
   return (
@@ -90,8 +136,8 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              backdropFilter: "blur(2px)",
+              background: "rgba(15,23,42,0.55)",
+              backdropFilter: "blur(3px)",
               zIndex: 40,
             }}
           />
@@ -106,7 +152,9 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
               padding: `${SP.md}px ${SP.lg}px ${SP.xl2}px`,
               borderTop: `1px solid ${C.border}`,
               zIndex: 50,
-              boxShadow: "0 -8px 28px rgba(0,0,0,0.2)",
+              boxShadow: "0 -8px 28px rgba(15,23,42,0.18)",
+              fontFamily: FONT_BODY,
+              animation: "fadeInUp 280ms cubic-bezier(0.2,0.7,0.2,1) both",
             }}
           >
             <div
@@ -134,6 +182,7 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.sm }}>
               {secLabels.map(({ label, idx }) => {
                 const active = tab === idx;
+                const Icon = TAB_ICONS[idx] || LayoutDashboard;
                 return (
                   <button
                     key={label}
@@ -148,8 +197,13 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
                       fontWeight: active ? W.sb : W.m,
                       cursor: "pointer",
                       textAlign: "left",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: SP.sm,
+                      fontFamily: FONT_BODY,
                     }}
                   >
+                    <Icon size={16} strokeWidth={active ? 2.5 : 2} />
                     {label}
                   </button>
                 );
@@ -172,12 +226,14 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
           padding: `${SP.sm}px 0 ${SP.sm}px`,
           paddingBottom: `calc(${SP.sm}px + env(safe-area-inset-bottom))`,
           zIndex: 30,
-          boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+          boxShadow: "0 -2px 12px rgba(15,23,42,0.06)",
+          fontFamily: FONT_BODY,
         }}
       >
-        {principales.map(({ label, idx, icon }) => {
+        {principales.map(({ label, idx }) => {
           const active = tab === idx;
           const esAlerta = idx === 9;
+          const Icon = TAB_ICONS[idx] || LayoutDashboard;
           return (
             <button
               key={label}
@@ -186,7 +242,7 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 4,
+                gap: 3,
                 padding: `${SP.xs}px ${SP.md}px`,
                 background: "none",
                 border: "none",
@@ -194,11 +250,11 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
                 color: active ? C.accent : C.tm,
                 position: "relative",
                 minWidth: 60,
+                transition: "color 160ms ease",
+                fontFamily: FONT_BODY,
               }}
             >
-              <span style={{ fontSize: 18, fontWeight: active ? W.b : W.r, lineHeight: 1 }}>
-                {icon}
-              </span>
+              <Icon size={20} strokeWidth={active ? 2.5 : 2} />
               <span style={{ fontSize: S.xxs, fontWeight: active ? W.sb : W.m, letterSpacing: "0.2px" }}>
                 {label}
               </span>
@@ -207,10 +263,10 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
                   style={{
                     position: "absolute",
                     top: 0,
-                    right: 10,
+                    right: 8,
                     background: C.red,
                     color: "#fff",
-                    borderRadius: 10,
+                    borderRadius: 999,
                     fontSize: S.xxs,
                     fontWeight: W.b,
                     padding: "1px 5px",
@@ -229,16 +285,17 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 4,
+            gap: 3,
             padding: `${SP.xs}px ${SP.md}px`,
             background: "none",
             border: "none",
             cursor: "pointer",
             color: secundariasIdx.includes(tab) ? C.accent : C.tm,
             minWidth: 60,
+            fontFamily: FONT_BODY,
           }}
         >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>⋯</span>
+          <MoreHorizontal size={20} strokeWidth={secundariasIdx.includes(tab) ? 2.5 : 2} />
           <span style={{ fontSize: S.xxs, fontWeight: W.m, letterSpacing: "0.2px" }}>Más</span>
         </button>
       </div>

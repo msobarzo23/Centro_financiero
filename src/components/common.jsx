@@ -1,11 +1,27 @@
 // Componentes UI compartidos entre pestañas.
-import { S, W, R, SP, eyebrow, bigNumber, cardStyle } from '../utils/theme.js';
+import { S, W, R, SP, eyebrow, bigNumber, cardStyle, FONT_TITLE, FONT_BODY } from '../utils/theme.js';
 
 // Card: contenedor unificado. Usa en vez de <div style={{background: C.surface, ...}}>.
-export function Card({ C, pad = "md", elevated = false, onClick, children, style }) {
+// Por defecto aplica animación fadeInUp; desactívala con animate={false}.
+export function Card({
+  C,
+  pad = "md",
+  elevated = false,
+  onClick,
+  children,
+  style,
+  className,
+  animate = true,
+  hover = false,
+}) {
+  const cls = [className, animate ? "card-anim" : "", hover ? "card-hover" : ""]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   return (
     <div
       onClick={onClick}
+      className={cls || undefined}
       style={{
         ...cardStyle(C, { pad, elevated }),
         cursor: onClick ? "pointer" : "default",
@@ -27,7 +43,8 @@ export function Eyebrow({ C, children, style }) {
 }
 
 // Título de sección grande (ej: "Saldos por banco").
-export function SectionTitle({ C, children, right }) {
+// Usa la tipografía display de la skill (DM Serif Display) para transmitir carácter ejecutivo.
+export function SectionTitle({ C, children, right, serif = false }) {
   return (
     <div
       style={{
@@ -35,9 +52,20 @@ export function SectionTitle({ C, children, right }) {
         justifyContent: "space-between",
         alignItems: "baseline",
         marginBottom: SP.md,
+        gap: SP.md,
+        flexWrap: "wrap",
       }}
     >
-      <div style={{ fontSize: S.lg, fontWeight: W.sb, color: C.text, letterSpacing: "-0.2px" }}>
+      <div
+        style={{
+          fontSize: serif ? S.xl2 : S.lg,
+          fontWeight: serif ? W.r : W.sb,
+          color: C.text,
+          letterSpacing: serif ? "-0.5px" : "-0.2px",
+          fontFamily: serif ? FONT_TITLE : FONT_BODY,
+          lineHeight: 1.2,
+        }}
+      >
         {children}
       </div>
       {right && <div>{right}</div>}
@@ -50,6 +78,7 @@ export function Metric({ label, value, sub, color, C, size = 'normal', onClick }
   return (
     <div
       onClick={onClick}
+      className="card-anim"
       style={{
         ...cardStyle(C, { pad: big ? "lg" : "md" }),
         flex: 1,
@@ -60,7 +89,7 @@ export function Metric({ label, value, sub, color, C, size = 'normal', onClick }
       <Eyebrow C={C}>{label}</Eyebrow>
       <div style={bigNumber(C, color || C.accent)}>{value}</div>
       {sub && (
-        <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
+        <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m, fontFamily: FONT_BODY }}>
           {sub}
         </div>
       )}
@@ -90,10 +119,9 @@ export function Loading({ C }) {
           animation: "spin 1s linear infinite",
         }}
       />
-      <div style={{ fontSize: S.base, color: C.tm, fontWeight: W.m }}>
+      <div style={{ fontSize: S.base, color: C.tm, fontWeight: W.m, fontFamily: FONT_BODY }}>
         Cargando datos desde Google Sheets…
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
@@ -119,7 +147,6 @@ export function SkeletonCard({ C, height = 80 }) {
           animation: "shimmer 1.8s infinite",
         }}
       />
-      <style>{`@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}`}</style>
     </div>
   );
 }

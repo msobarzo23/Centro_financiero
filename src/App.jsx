@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { fetchData } from './data.js';
-import { T, S, W, R, SP, FONT_STACK } from './utils/theme.js';
+import { T, S, W, R, SP, FONT_BODY, FONT_TITLE } from './utils/theme.js';
 import { buildAlertas } from './utils/alertas.js';
 import { useIsMobile } from './utils/useMediaQuery.js';
 
@@ -32,7 +33,7 @@ const TEMA_KEY = 'cmf_tbello_tema';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export default function App() {
-  const [tema, setTema] = useState(() => localStorage.getItem(TEMA_KEY) || 'dark');
+  const [tema, setTema] = useState(() => localStorage.getItem(TEMA_KEY) || 'light');
   const [tab, setTab] = useState(0);
   const [toasts, setToasts] = useState([]);
 
@@ -113,7 +114,7 @@ export default function App() {
     document.body.style.background = C.bg;
     document.body.style.color = C.text;
     document.body.style.margin = '0';
-    document.body.style.fontFamily = FONT_STACK;
+    document.body.style.fontFamily = FONT_BODY;
     document.body.style.fontFeatureSettings = "'cv11' 1, 'ss01' 1";
     document.body.style.textRendering = 'optimizeLegibility';
     document.body.style.webkitFontSmoothing = 'antialiased';
@@ -190,6 +191,7 @@ export default function App() {
     ffmmMov,
     leasingDetalle,
     leasingResumen,
+    leasingProximas,
     credito,
     creditoPendiente,
     saldoInsoluto,
@@ -247,6 +249,7 @@ export default function App() {
             {...commonProps}
             leasingDetalle={leasingDetalle}
             leasingResumen={leasingResumen}
+            leasingProximas={leasingProximas}
           />
         );
       case 8:
@@ -330,8 +333,8 @@ export default function App() {
         <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: SP.md }}>
           <div
             style={{
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               borderRadius: R.md,
               background: `linear-gradient(135deg, ${C.accent}, ${C.teal})`,
               display: 'flex',
@@ -342,6 +345,8 @@ export default function App() {
               fontWeight: W.b,
               letterSpacing: '-0.5px',
               flexShrink: 0,
+              fontFamily: FONT_TITLE,
+              boxShadow: '0 2px 6px rgba(29,78,216,0.25)',
             }}
           >
             TB
@@ -349,20 +354,21 @@ export default function App() {
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontSize: isMobile ? S.md : S.lg,
-                fontWeight: W.sb,
+                fontSize: isMobile ? S.lg : S.xl,
+                fontWeight: W.r,
                 color: C.text,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                letterSpacing: '-0.3px',
-                lineHeight: 1.2,
+                letterSpacing: '-0.5px',
+                lineHeight: 1.15,
+                fontFamily: FONT_TITLE,
               }}
             >
               {isMobile ? 'CMF · TBello' : 'Centro de Mando Financiero'}
             </div>
             {!isMobile && (
-              <div style={{ fontSize: S.xs, color: C.tm, marginTop: 2, fontWeight: W.m }}>
+              <div style={{ fontSize: S.xs, color: C.tm, marginTop: 2, fontWeight: W.m, fontFamily: FONT_BODY }}>
                 Transportes Bello e Hijos Ltda. · {ALL_TABS[tab]}
               </div>
             )}
@@ -384,49 +390,48 @@ export default function App() {
             disabled={isFetching}
             title="Refrescar"
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: R.md,
-              fontSize: S.md,
               background: C.surfaceAlt,
               color: isFetching ? C.td : C.tm,
               border: `1px solid ${C.border}`,
               cursor: isFetching ? 'wait' : 'pointer',
               opacity: isFetching ? 0.6 : 1,
-              transition: 'background 120ms ease',
+              transition: 'background 160ms ease, color 160ms ease',
             }}
+            onMouseEnter={(e) => { if (!isFetching) { e.currentTarget.style.background = C.accentD; e.currentTarget.style.color = C.accent; } }}
+            onMouseLeave={(e) => { if (!isFetching) { e.currentTarget.style.background = C.surfaceAlt; e.currentTarget.style.color = C.tm; } }}
           >
-            <span
-              style={{
-                display: 'inline-block',
-                animation: isFetching ? 'spin 0.9s linear infinite' : 'none',
-              }}
-            >
-              ↻
-            </span>
+            <RefreshCw
+              size={16}
+              strokeWidth={2}
+              style={{ animation: isFetching ? 'spin 0.9s linear infinite' : 'none' }}
+            />
           </button>
           <button
             onClick={toggleTema}
             title={tema === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: R.md,
-              fontSize: S.md,
               background: C.surfaceAlt,
               color: C.tm,
               border: `1px solid ${C.border}`,
               cursor: 'pointer',
-              transition: 'background 120ms ease',
+              transition: 'background 160ms ease, color 160ms ease',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = C.accentD; e.currentTarget.style.color = C.accent; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = C.surfaceAlt; e.currentTarget.style.color = C.tm; }}
           >
-            {tema === 'dark' ? '☀' : '☾'}
+            {tema === 'dark' ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
           </button>
         </div>
       </div>
@@ -447,8 +452,6 @@ export default function App() {
       {isMobile && <MobileBottomNav tab={tab} setTab={setTab} C={C} nAlertas={alertas.length} />}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} C={C} />
-
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }

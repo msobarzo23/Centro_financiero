@@ -48,6 +48,22 @@ function findHeaderIdx(lines, keywords) {
   return 0;
 }
 
+// Extrae un bloque CSV desde la primera línea que cumpla el patrón regex
+// hasta la primera banda separadora (2+ líneas consecutivas que sólo tengan
+// comas/espacios). Los Google Sheets publicados a CSV usan ",,,,,,,," como
+// fila vacía, no \n\n, así que no basta con buscar newlines puros.
+function extractCsvBlock(text, headerRegex) {
+  if (!text) return '';
+  const m = text.match(headerRegex);
+  if (!m) return '';
+  const sub = text.slice(m.index);
+  // 3 saltos de línea donde entre ellos sólo hay comas/espacios/tabs => 2
+  // líneas sin datos reales == fin de tabla.
+  const endMatch = sub.match(/\r?\n[ \t,]*\r?\n[ \t,]*\r?\n/);
+  if (endMatch && endMatch.index > 0) return sub.slice(0, endMatch.index);
+  return sub;
+}
+
 function normalizeLeasingHeaders(parsed) {
   const remap = {};
   (parsed.meta.fields || []).forEach((f) => {
@@ -322,12 +338,12 @@ export async function fetchAllData() {
       };
     });
 
-  // ── Leasing Resumen ──
-  const leasingResLines = leasingResText.split('\n');
-  const leasingResParsed = Papa.parse(
-    leasingResLines.slice(findHeaderIdx(leasingResLines, ['MES', 'CUOTA'])).join('\n'),
-    { header: true, skipEmptyLines: true },
-  );
+  // ── Leasing Resumen (tabla "Proyección mensual de cuotas") ──
+  // La hoja pública "Leasing_Resumen" tiene varias sub-tablas separadas por
+  // líneas vacías. La que nos interesa aquí es la de proyección mensual
+  // cuyos headers comienzan con "Mes,Anio,...". Extraemos solo ese bloque.
+  const resumenBlockText = extractCsvBlock(leasingResText, /^[ \t]*Mes,[ \t]*Anio,/mi);
+  const leasingResParsed = Papa.parse(resumenBlockText, { header: true, skipEmptyLines: true });
   const leasingResNorm = normalizeLeasingHeaders(leasingResParsed);
   const leasingResumen = leasingResNorm
     .filter((r) => {
@@ -344,18 +360,54 @@ export async function fetchAllData() {
       return {
         mes: (r['Mes'] || '').trim(),
         anio: (r['Anio'] || r['Año'] || '').trim(),
-        cuotaUFTotal: parseUF(g('Cuota UF Total Mes', 'Cuota UF Total')),
+        cuotaUFTotal: parseUF(g('Cuota UF Total Mes', 'Cuota UF Total Mes (dia5+dia15)', 'Cuota UF Total')),
         cuotaCLPsIVA: parseCLP(g('Cuota CLP s/IVA', 'Cuota CLP s IVA')),
         cuotaCLPcIVA: parseCLP(g('Cuota CLP c/IVA', 'Cuota CLP c IVA')),
         bciDia5: parseUF(g('BCI (UF) Dia 5', 'BCI (UF) Día 5', 'BCI Dia5', 'BCI (UF)')),
         bciDia15: parseUF(g('BCI (UF) Dia 15', 'BCI (UF) Día 15', 'BCI Dia15')),
         vfsVolvo: parseUF(g('VFS VOLVO (UF)', 'VFS VOLVO', 'VFS (UF)')),
-        bancoChile: parseUF(g('BANCO DE CHILE (UF)', 'BANCO DE CHILE', 'Banco Chile (UF)')),
+        bancoChile: parseUF(g('BANCO CHILE (UF)', 'BANCO DE CHILE (UF)', 'BANCO DE CHILE', 'Banco Chile (UF)')),
         contratosActivos: parseNum(g('Contratos Activos')) || 0,
         vesteEstesMes: (r['Vence este mes'] || '').trim(),
-        delta: parseCLP(g('Delta vs mes anterior', 'Delta')),
+        delta: parseCLP(g('Delta UF vs mes ant.', 'Delta vs mes anterior', 'Delta')),
       };
     });
+
+  // ── Leasing Próximas Cuotas (tabla "PROXIMAS CUOTAS A PAGAR") ──
+  // Tabla ya calculada en la hoja: fecha vencimiento + monto CLP con IVA ya incluido.
+  // Es la fuente más limpia para mostrar "próximos 2 pagos".
+  const proximasBlockText = extractCsvBlock(
+    leasingResText,
+    /^[ \t]*Fecha Vencimiento,[ \t]*D[ií]as? Restantes,/mi,
+  );
+  const leasingProximasParsed = Papa.parse(proximasBlockText, { header: true, skipEmptyLines: true });
+  const leasingProximas = leasingProximasParsed.data
+    .filter((r) => {
+      const fechaRaw = (r['Fecha Vencimiento'] || '').trim();
+      // Formato esperado "dd/mm/yyyy" o "yyyy-mm-dd". Filtra headers de tablas
+      // subsiguientes que Papa parseó con los mismos nombres de columna.
+      return /^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}$/.test(fechaRaw);
+    })
+    .map((r) => {
+      const g = (...keys) => {
+        for (const k of keys) {
+          if (r[k] != null && r[k] !== '') return r[k];
+        }
+        return '';
+      };
+      const fechaRaw = g('Fecha Vencimiento', 'Fecha  Vencimiento').trim();
+      return {
+        fechaRaw,
+        fecha: parseDate(fechaRaw) || '',
+        diasRestantes: parseNum(g('Dias Restantes', 'Días Restantes')) || 0,
+        cuotaUF: parseUF(g('Cuota UF Total', 'Cuota UF  Total', 'Cuota UF')),
+        cuotaCLPsIVA: parseCLP(g('Cuota CLP s/IVA', 'Cuota CLP s IVA')),
+        cuotaCLPcIVA: parseCLP(g('Cuota CLP c/IVA', 'Cuota CLP c IVA')),
+        bancos: g('Bancos que cobran', 'Bancos').trim(),
+        estado: g('Estado').trim(),
+      };
+    })
+    .filter((r) => r.fecha && r.cuotaCLPcIVA > 0);
 
   // ── Crédito Comercial ──
   // Nota: los créditos se descuentan por PAC, así que cualquier cuota con
@@ -395,6 +447,7 @@ export async function fetchAllData() {
     ffmmMov: ffmmMovimientos,
     leasingDetalle,
     leasingResumen,
+    leasingProximas,
     credito,
     creditoPendiente,
     saldoInsoluto: saldoInsolutoActual,

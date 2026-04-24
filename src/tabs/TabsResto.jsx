@@ -1,13 +1,75 @@
 import { useMemo, useState } from 'react';
+import { CalendarClock } from 'lucide-react';
 import {
   f, fS, fd, fdf, dd, fUF, clas, colorTipo, colorBanco,
   mesLabel, mesLabelLargo,
 } from '../utils/format.js';
-import { S, W, R, SP } from '../utils/theme.js';
+import { S, W, R, SP, FONT_MONO, FONT_TITLE } from '../utils/theme.js';
 import { Card, Eyebrow, Metric } from '../components/common.jsx';
 import Proyeccion90d from '../components/Proyeccion90d.jsx';
 import FlujoConCobranzas from '../components/FlujoConCobranzas.jsx';
 import { buildFlujo13s } from '../utils/flujo13s.js';
+import { useIndicadores } from '../utils/indicadores.js';
+
+// Mapeo de meses en español (como vienen en leasingResumen) a número 1..12.
+const MESES_NUM = {
+  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+  julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+};
+
+const IVA_LEASING = 0.19;
+
+// Calcula las próximas N fechas de pago de leasing agregadas por día (5 o 15).
+// Día 5: suma BCI día 5 + VFS Volvo + Banco de Chile (todas en UF).
+// Día 15: solo BCI día 15.
+// Convierte el total UF a CLP con el valor actual de la UF y aplica IVA 19%.
+function proximosPagosLeasing(leasingResumen, hoyISO, uf, n = 2) {
+  if (!uf || uf <= 0 || !Array.isArray(leasingResumen)) return [];
+  const hoyDate = new Date(hoyISO + 'T12:00:00');
+  const pagos = [];
+  for (const r of leasingResumen) {
+    const mesN = MESES_NUM[(r.mes || '').toLowerCase().trim()];
+    if (!mesN) continue;
+    const anioN = Number(r.anio);
+    if (!Number.isFinite(anioN) || anioN < 2000) continue;
+    const dia5 = new Date(anioN, mesN - 1, 5, 12);
+    const dia15 = new Date(anioN, mesN - 1, 15, 12);
+    const ufDia5 = (r.bciDia5 || 0) + (r.vfsVolvo || 0) + (r.bancoChile || 0);
+    const ufDia15 = r.bciDia15 || 0;
+    if (dia5 >= hoyDate && ufDia5 > 0) {
+      const clpNeto = ufDia5 * uf;
+      pagos.push({
+        fechaISO: `${anioN}-${String(mesN).padStart(2, '0')}-05`,
+        fecha: dia5,
+        dia: 5,
+        uf: ufDia5,
+        clpNeto,
+        clpIVA: clpNeto * IVA_LEASING,
+        clpTotal: clpNeto * (1 + IVA_LEASING),
+        desglose: {
+          bci: r.bciDia5 || 0,
+          vfsVolvo: r.vfsVolvo || 0,
+          bancoChile: r.bancoChile || 0,
+        },
+      });
+    }
+    if (dia15 >= hoyDate && ufDia15 > 0) {
+      const clpNeto = ufDia15 * uf;
+      pagos.push({
+        fechaISO: `${anioN}-${String(mesN).padStart(2, '0')}-15`,
+        fecha: dia15,
+        dia: 15,
+        uf: ufDia15,
+        clpNeto,
+        clpIVA: clpNeto * IVA_LEASING,
+        clpTotal: clpNeto * (1 + IVA_LEASING),
+        desglose: { bci: r.bciDia15 || 0, vfsVolvo: 0, bancoChile: 0 },
+      });
+    }
+  }
+  pagos.sort((a, b) => a.fecha - b.fecha);
+  return pagos.slice(0, n);
+}
 
 const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
 
@@ -868,13 +930,48 @@ export function TabFFMM({ C, ffmm, movimientos }) {
 }
 
 // ─── LEASING ─────────────────────────────────────────────────────────────────
-export function TabLeasing({ C, leasingDetalle, leasingResumen, isMobile, hoy }) {
+export function TabLeasing({ C, leasingDetalle, leasingResumen, leasingProximas, isMobile, hoy }) {
   const totalDeudaUF = leasingDetalle.reduce((s, d) => s + d.deudaUF, 0);
   const totalCuotaCLP = leasingDetalle.reduce((s, d) => s + d.cuotaCLPcIVA, 0);
   const totalTractos = leasingDetalle.reduce((s, d) => s + d.nTractos, 0);
   const totalCuotasPorPagar = leasingDetalle.reduce((s, d) => s + d.cuotasPorPagar, 0);
 
-  const proximas = leasingResumen.slice(0, 3);
+  // UF actual desde mindicador.cl (se usa solo como fallback si la hoja no tiene
+  // la tabla PROXIMAS CUOTAS A PAGAR ya calculada).
+  const { data: indicadores } = useIndicadores();
+  const ufActual = indicadores?.uf || null;
+
+  // Preferir la tabla "PROXIMAS CUOTAS A PAGAR" de la hoja (ya trae fecha + CLP c/IVA).
+  // Solo si no alcanzan 2 filas futuras, complementar con cálculo por UF actual.
+  const proximosPagos = useMemo(() => {
+    const desdeHoja = (Array.isArray(leasingProximas) ? leasingProximas : [])
+      .filter((p) => p.fecha && p.fecha >= hoy && p.cuotaCLPcIVA > 0)
+      .slice(0, 2)
+      .map((p) => ({
+        fechaISO: p.fecha,
+        fecha: new Date(p.fecha + 'T12:00:00'),
+        dia: Number(p.fecha.slice(-2)),
+        uf: p.cuotaUF || 0,
+        clpNeto: p.cuotaCLPsIVA,
+        clpIVA: Math.max(0, (p.cuotaCLPcIVA || 0) - (p.cuotaCLPsIVA || 0)),
+        clpTotal: p.cuotaCLPcIVA,
+        bancos: p.bancos,
+        estado: p.estado,
+        origen: 'hoja',
+      }));
+    if (desdeHoja.length >= 2) return desdeHoja;
+    // Fallback / complemento con cálculo vía UF actual sobre leasingResumen.
+    const calculados = proximosPagosLeasing(leasingResumen, hoy, ufActual, 2 + desdeHoja.length);
+    const yaEn = new Set(desdeHoja.map((p) => p.fechaISO));
+    for (const c of calculados) {
+      if (desdeHoja.length >= 2) break;
+      if (yaEn.has(c.fechaISO)) continue;
+      desdeHoja.push({ ...c, origen: 'calculado' });
+    }
+    return desdeHoja.slice(0, 2);
+  }, [leasingProximas, leasingResumen, hoy, ufActual]);
+
+  const origenEsHoja = proximosPagos.length > 0 && proximosPagos[0].origen === 'hoja';
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: SP.lg }}>
@@ -885,27 +982,91 @@ export function TabLeasing({ C, leasingDetalle, leasingResumen, isMobile, hoy })
         <Metric C={C} label="Cuotas por pagar" value={totalCuotasPorPagar} sub="Suma contratos activos" color={C.td} />
       </div>
 
-      {proximas.length > 0 && (
-        <Card C={C}>
-          <Eyebrow C={C}>Próximas cuotas a pagar</Eyebrow>
+      <Card C={C} pad="lg">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: SP.md,
+            gap: SP.md,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: SP.sm,
+              fontSize: S.lg,
+              fontWeight: W.sb,
+              color: C.text,
+              letterSpacing: "-0.2px",
+            }}
+          >
+            <CalendarClock size={18} color={C.accent} />
+            Próximos 2 pagos de leasing
+          </div>
+          <div style={{ fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
+            {origenEsHoja
+              ? "Datos desde Leasing_Resumen · IVA 19% incluido"
+              : (ufActual
+                ? `Calculado con UF $${Math.round(ufActual).toLocaleString("es-CL")} · IVA 19% incluido`
+                : "Cargando valor de UF…")}
+          </div>
+        </div>
+        {proximosPagos.length === 0 ? (
+          <div
+            style={{
+              padding: `${SP.md}px ${SP.lg}px`,
+              borderRadius: R.md,
+              background: C.surfaceAlt,
+              border: `1px dashed ${C.border}`,
+              color: C.tm,
+              fontSize: S.base,
+              fontWeight: W.m,
+              lineHeight: 1.5,
+            }}
+          >
+            No se pudieron calcular los próximos 2 pagos.
+            <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontFamily: MONO }}>
+              Diagnóstico → filas leasingResumen: <b>{leasingResumen.length}</b>
+              {" · "}UF disponible: <b>{ufActual ? "sí" : "no"}</b>
+              {" · "}hoy: <b>{hoy}</b>
+              {leasingResumen.length > 0 && (
+                <>
+                  {" · "}primer mes: <b>{leasingResumen[0]?.mes} {leasingResumen[0]?.anio}</b>
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs }}>
+              Causas frecuentes: la hoja de Google Sheets no tiene filas con meses futuros,
+              o la columna "Año" viene vacía. Revisa la hoja de Leasing Resumen.
+            </div>
+          </div>
+        ) : (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
               gap: SP.md,
             }}
           >
-            {proximas.map((r, i) => {
-              const bciTotal = (r.bciDia5 || 0) + (r.bciDia15 || 0);
-              const esUrgente = i === 0;
+            {proximosPagos.map((p, i) => {
+              const esProximo = i === 0;
+              const dias = dd(hoy, p.fechaISO);
               return (
                 <div
-                  key={i}
+                  key={p.fechaISO}
                   style={{
-                    padding: `${SP.md}px ${SP.lg}px`,
-                    borderRadius: R.md,
-                    background: esUrgente ? C.amberD : C.surfaceAlt,
-                    border: `1px solid ${esUrgente ? C.amber + "55" : C.border}`,
+                    padding: `${SP.lg}px ${SP.xl}px`,
+                    borderRadius: R.lg,
+                    background: esProximo
+                      ? `linear-gradient(135deg, ${C.accent}, ${C.accent}EE 70%, ${C.teal}DD)`
+                      : C.surfaceAlt,
+                    border: esProximo ? "none" : `1px solid ${C.border}`,
+                    color: esProximo ? "#FFFFFF" : C.text,
+                    boxShadow: esProximo ? "0 4px 14px rgba(29,78,216,0.25)" : "none",
                   }}
                 >
                   <div
@@ -913,45 +1074,100 @@ export function TabLeasing({ C, leasingDetalle, leasingResumen, isMobile, hoy })
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      marginBottom: SP.xs,
+                      marginBottom: SP.sm,
                     }}
                   >
-                    <div style={{ fontSize: S.base, fontWeight: W.sb, color: C.text, textTransform: "capitalize" }}>
-                      {r.mes} {r.anio}
+                    <div
+                      style={{
+                        fontSize: S.xs,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.6px",
+                        fontWeight: W.sb,
+                        opacity: esProximo ? 0.85 : 1,
+                        color: esProximo ? "#FFFFFF" : C.tm,
+                      }}
+                    >
+                      {esProximo ? "Próximo pago" : "Siguiente"}
                     </div>
-                    {esUrgente && <Pill bg={C.amber + "33"} color={C.amberT} C={C}>Próxima</Pill>}
+                    <div
+                      style={{
+                        fontSize: S.xxs,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: esProximo ? "rgba(255,255,255,0.22)" : C.accentD,
+                        color: esProximo ? "#FFFFFF" : C.accent,
+                        fontWeight: W.b,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.4px",
+                      }}
+                    >
+                      en {dias} {dias === 1 ? "día" : "días"}
+                    </div>
                   </div>
                   <div
                     style={{
-                      fontSize: S.xl2,
-                      fontWeight: W.b,
-                      color: esUrgente ? C.amberT : C.text,
-                      fontFamily: MONO,
+                      fontSize: isMobile ? S.xl2 : S.xl3,
+                      fontWeight: W.r,
+                      fontFamily: FONT_TITLE,
+                      letterSpacing: "-0.5px",
+                      lineHeight: 1.1,
                       marginBottom: SP.xs,
-                      letterSpacing: "-0.3px",
+                      textTransform: "capitalize",
+                      color: esProximo ? "#FFFFFF" : C.text,
                     }}
                   >
-                    {f(r.cuotaCLPcIVA)}
+                    {fdf(p.fechaISO)}
                   </div>
-                  <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
-                    s/IVA: {f(r.cuotaCLPsIVA)}
+                  <div
+                    style={{
+                      fontSize: isMobile ? S.xl2 : S.xl3,
+                      fontWeight: W.b,
+                      fontFamily: FONT_MONO,
+                      letterSpacing: "-0.4px",
+                      lineHeight: 1.1,
+                      marginTop: SP.sm,
+                      color: esProximo ? "#FFFFFF" : C.text,
+                    }}
+                  >
+                    {f(p.clpTotal)}
                   </div>
-                  <div style={{ marginTop: SP.sm, display: "flex", gap: SP.xs, flexWrap: "wrap" }}>
-                    {bciTotal > 0 && <Pill bg={C.accentD} color={C.accent} C={C}>BCI {fUF(bciTotal)} UF</Pill>}
-                    {r.vfsVolvo > 0 && <Pill bg={C.amberD} color={C.amber} C={C}>VFS {fUF(r.vfsVolvo)} UF</Pill>}
-                    {r.bancoChile > 0 && <Pill bg={C.tealD} color={C.teal} C={C}>BancoChile {fUF(r.bancoChile)} UF</Pill>}
+                  <div
+                    style={{
+                      fontSize: S.xs,
+                      fontWeight: W.m,
+                      opacity: esProximo ? 0.85 : 1,
+                      color: esProximo ? "#FFFFFF" : C.tm,
+                      marginTop: 2,
+                    }}
+                  >
+                    {p.uf > 0 && <>{fUF(p.uf)} UF · </>}neto {fS(p.clpNeto)} + IVA {fS(p.clpIVA)}
                   </div>
-                  {r.contratosActivos > 0 && (
-                    <div style={{ marginTop: SP.sm, fontSize: S.xs, color: C.td, fontWeight: W.m }}>
-                      {r.contratosActivos} contratos activos
+                  {p.bancos && (
+                    <div
+                      style={{
+                        marginTop: SP.sm,
+                        fontSize: S.xxs,
+                        fontWeight: W.sb,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.4px",
+                        opacity: esProximo ? 0.85 : 1,
+                        color: esProximo ? "#FFFFFF" : C.tm,
+                      }}
+                    >
+                      Bancos: {p.bancos}
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
-        </Card>
-      )}
+        )}
+        {!ufActual && proximosPagos.length > 0 && (
+          <div style={{ marginTop: SP.md, fontSize: S.xs, color: C.td, fontWeight: W.m }}>
+            Los montos en pesos aparecerán cuando se cargue el valor actual de la UF (mindicador.cl).
+          </div>
+        )}
+      </Card>
 
       <div style={tableContainerStyle(C)}>
         <div style={{ padding: `${SP.md}px ${SP.lg}px`, borderBottom: `1px solid ${C.borderL}` }}>
