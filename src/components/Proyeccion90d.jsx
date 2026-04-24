@@ -7,7 +7,8 @@ import { Card } from './common.jsx';
 const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
 
 // Proyección visual del saldo bancario para los próximos 90 días.
-// Todo en neto (sin IVA). Ingresos desfasados por plazo de cobro.
+// Usa montos con IVA (montoReal) porque eso es lo que efectivamente entra
+// al banco y el calendario/leasing ya traen impuestos incluidos.
 export default function Proyeccion90d({
   C,
   bancos,
@@ -25,9 +26,15 @@ export default function Proyeccion90d({
   const multiplicadores = { conservador: 0.7, base: 1.0, optimista: 1.3 };
 
   const proyeccion = useMemo(() => {
+    // Mapeamos montoReal (bruto con IVA) como si fuera neto para que
+    // el motor de proyección trabaje en valores de caja reales.
+    const ventasBrutas = (ventas?.rows || []).map((r) => ({
+      ...r,
+      neto: r.montoReal ?? r.neto ?? 0,
+    }));
     return proyectar({
       saldoInicial: saldoActualBancos(bancos),
-      ventasRows: ventas?.rows || [],
+      ventasRows: ventasBrutas,
       calendario,
       leasingDetalle,
       creditoPendiente,
@@ -35,6 +42,7 @@ export default function Proyeccion90d({
       dias: 90,
       plazoCobro,
       multiplicadorIngresos: multiplicadores[escenario],
+      leasingCampo: 'cuotaCLPcIVA',
     });
   }, [bancos, ventas, calendario, leasingDetalle, creditoPendiente, hoy, escenario, plazoCobro]);
 
@@ -114,7 +122,7 @@ export default function Proyeccion90d({
               letterSpacing: "-0.2px",
             }}
           >
-            Proyección de saldo · próximos 90 días (neto)
+            Proyección de saldo · próximos 90 días (con IVA)
           </div>
           <div style={{ fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
             Parte de {f(saldoInicial)} · {Math.round(pctConocido * 100)}% de ingresos ya facturados

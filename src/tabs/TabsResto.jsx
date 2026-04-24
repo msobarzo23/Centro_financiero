@@ -233,7 +233,8 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
     egresosPorMes[mes] += c.monto;
   });
 
-  const cuotaLeasingMes = leasingDetalle.reduce((s, d) => s + d.cuotaCLPsIVA, 0);
+  // Cuotas de leasing con IVA — lo que realmente sale de caja cada mes.
+  const cuotaLeasingMes = leasingDetalle.reduce((s, d) => s + d.cuotaCLPcIVA, 0);
   const cuotaCreditoMes = creditoPendiente.length > 0 ? (creditoPendiente[0].valorCuota || 0) : 0;
 
   const mesesSet = new Set();
@@ -245,8 +246,11 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }
   const meses12 = [...mesesSet].sort().slice(-14);
 
+  // Ingresos con IVA — monto bruto que efectivamente entra al banco.
+  // (Para la vista de Ventas se usa neto; aquí usamos bruto porque el
+  // calendario y leasing ya vienen con impuestos incluidos.)
   const ventasPorMes = {};
-  ventas.porMes.forEach(m => { ventasPorMes[m.mes] = m.neto; });
+  ventas.porMes.forEach(m => { ventasPorMes[m.mes] = m.montoReal; });
 
   const data12 = meses12.map(mes => {
     const ingreso = ventasPorMes[mes] || 0;
@@ -272,14 +276,14 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }
 
   const ventasPorDia = {};
-  ventas.porDia.forEach(d => { ventasPorDia[d.fecha] = d.neto; });
+  ventas.porDia.forEach(d => { ventasPorDia[d.fecha] = d.montoReal; });
   const egresosPorDia = {};
   calendario.forEach(c => { if (c.fecha) egresosPorDia[c.fecha] = (egresosPorDia[c.fecha] || 0) + c.monto; });
   const diasVtoLeasing = [...new Set(leasingDetalle.map(d => d.diaVto))];
   dias30.forEach(fecha => {
     const diaNum = parseInt(fecha.split('-')[2], 10);
     if (diasVtoLeasing.includes(diaNum)) {
-      const cuotaDia = leasingDetalle.filter(d => d.diaVto === diaNum).reduce((s, d) => s + d.cuotaCLPsIVA, 0);
+      const cuotaDia = leasingDetalle.filter(d => d.diaVto === diaNum).reduce((s, d) => s + d.cuotaCLPcIVA, 0);
       egresosPorDia[fecha] = (egresosPorDia[fecha] || 0) + cuotaDia;
     }
   });
