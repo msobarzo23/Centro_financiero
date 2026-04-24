@@ -231,6 +231,9 @@ export default function App() {
             calendario={cal}
             leasingDetalle={leasingDetalle}
             creditoPendiente={creditoPendiente}
+            dap={dap}
+            ffmm={ffmm}
+            defontana={defontana}
           />
         );
       case 5:
