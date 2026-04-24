@@ -104,6 +104,7 @@ export function proyectar({
   dias = 90,
   plazoCobro = 30,
   multiplicadorIngresos = 1.0,
+  leasingCampo = 'cuotaCLPsIVA',
 }) {
   const fechas = listaFechas(hoy, dias);
   const vMes = ventasPorMes(ventasRows);
@@ -126,7 +127,7 @@ export function proyectar({
         (egresosPorFecha[c.fechaVenc] || 0) + (c.valorCuota || 0);
     }
   });
-  const egresosLeasing = expandirLeasing(leasingDetalle, fechas, 'cuotaCLPsIVA');
+  const egresosLeasing = expandirLeasing(leasingDetalle, fechas, leasingCampo);
   Object.entries(egresosLeasing).forEach(([fecha, monto]) => {
     egresosPorFecha[fecha] = (egresosPorFecha[fecha] || 0) + monto;
   });

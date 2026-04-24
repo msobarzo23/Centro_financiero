@@ -258,7 +258,7 @@ export default function TabCobranzas({
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 420 }}>
+        <div style={{ position: 'relative', flex: '0 1 260px', minWidth: 180 }}>
           <span
             style={{
               position: 'absolute',
