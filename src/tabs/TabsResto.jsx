@@ -225,6 +225,8 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
     });
   }, [defontana?.cobranzas, bancos, calendario, leasingDetalle, creditoPendiente, dap, ffmm, hoy]);
 
+  // Egresos: el calendario ya contiene todos los pagos del mes
+  // (incluidos leasing y crédito). No sumar nada encima.
   const egresosPorMes = {};
   calendario.forEach(c => {
     if (!c.fecha) return;
@@ -232,10 +234,6 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
     if (!egresosPorMes[mes]) egresosPorMes[mes] = 0;
     egresosPorMes[mes] += c.monto;
   });
-
-  // Cuotas de leasing con IVA — lo que realmente sale de caja cada mes.
-  const cuotaLeasingMes = leasingDetalle.reduce((s, d) => s + d.cuotaCLPcIVA, 0);
-  const cuotaCreditoMes = creditoPendiente.length > 0 ? (creditoPendiente[0].valorCuota || 0) : 0;
 
   const mesesSet = new Set();
   ventas.porMes.forEach(m => mesesSet.add(m.mes));
@@ -246,19 +244,23 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }
   const meses12 = [...mesesSet].sort().slice(-14);
 
-  // Ingresos con IVA — monto bruto que efectivamente entra al banco.
-  // (Para la vista de Ventas se usa neto; aquí usamos bruto porque el
-  // calendario y leasing ya vienen con impuestos incluidos.)
+  // Facturado por mes (con IVA) y cobrado estimado por mes:
+  // asumimos cobro a ~30 días, por lo que el mes M cobra lo facturado en M-1.
   const ventasPorMes = {};
   ventas.porMes.forEach(m => { ventasPorMes[m.mes] = m.montoReal; });
+  const cobradoPorMes = {};
+  Object.keys(ventasPorMes).forEach(mesFact => {
+    const [y, m] = mesFact.split('-').map(Number);
+    const sig = new Date(y, m, 1);
+    const mesSig = `${sig.getFullYear()}-${String(sig.getMonth() + 1).padStart(2, '0')}`;
+    cobradoPorMes[mesSig] = ventasPorMes[mesFact];
+  });
 
   const data12 = meses12.map(mes => {
-    const ingreso = ventasPorMes[mes] || 0;
-    const egresosCal = egresosPorMes[mes] || 0;
-    const esFuturo = mes >= hoy.substring(0, 7);
-    const egresosTotal = esFuturo ? egresosCal + cuotaLeasingMes + cuotaCreditoMes : egresosCal;
-    const neto = ingreso - egresosTotal;
-    return { mes, ingreso, egresos: egresosTotal, neto };
+    const ingreso = cobradoPorMes[mes] || 0;
+    const egresos = egresosPorMes[mes] || 0;
+    const neto = ingreso - egresos;
+    return { mes, ingreso, egresos, neto };
   });
 
   let acum12 = 0;
@@ -277,21 +279,9 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
 
   const ventasPorDia = {};
   ventas.porDia.forEach(d => { ventasPorDia[d.fecha] = d.montoReal; });
+  // Egresos diarios: solo calendario (ya incluye leasing y crédito).
   const egresosPorDia = {};
   calendario.forEach(c => { if (c.fecha) egresosPorDia[c.fecha] = (egresosPorDia[c.fecha] || 0) + c.monto; });
-  const diasVtoLeasing = [...new Set(leasingDetalle.map(d => d.diaVto))];
-  dias30.forEach(fecha => {
-    const diaNum = parseInt(fecha.split('-')[2], 10);
-    if (diasVtoLeasing.includes(diaNum)) {
-      const cuotaDia = leasingDetalle.filter(d => d.diaVto === diaNum).reduce((s, d) => s + d.cuotaCLPcIVA, 0);
-      egresosPorDia[fecha] = (egresosPorDia[fecha] || 0) + cuotaDia;
-    }
-  });
-  creditoPendiente.forEach(c => {
-    if (c.fechaVenc && dias30.includes(c.fechaVenc)) {
-      egresosPorDia[c.fechaVenc] = (egresosPorDia[c.fechaVenc] || 0) + c.valorCuota;
-    }
-  });
 
   const data30 = dias30.map(fecha => ({
     fecha,
@@ -311,7 +301,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
 
   const facturadoMesAct = ventasPorMes[mesAct] || 0;   // emitido este mes
   const cobradoMesAct = ventasPorMes[mesAnt] || 0;     // cobrado este mes (lag 30d)
-  const egresoMesAct = (egresosPorMes[mesAct] || 0) + cuotaLeasingMes + cuotaCreditoMes;
+  const egresoMesAct = egresosPorMes[mesAct] || 0;     // calendario del mes
   const balanceMesAct = cobradoMesAct - egresoMesAct;  // balance de caja real
   const promedioIngMensual = data12.filter(d => d.ingreso > 0).reduce((s, d) => s + d.ingreso, 0)
     / Math.max(data12.filter(d => d.ingreso > 0).length, 1);
@@ -436,12 +426,12 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
           label={`Cobrado est. ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
           value={cobradoMesAct > 0 ? f(cobradoMesAct) : "Sin datos"}
           sub="Facturado mes anterior (cobro ~30d después)" color={C.teal} />
-        <Metric C={C} label="Egresos comprometidos"
-          value={f(egresoMesAct)} sub="Calendario + leasing + crédito (con IVA)" color={C.red} />
+        <Metric C={C} label="Egresos del mes"
+          value={f(egresoMesAct)} sub="Calendario (con IVA)" color={C.red} />
         <Metric C={C} label="Balance del mes"
           value={f(balanceMesAct)} sub="Cobrado − egreso" color={balanceMesAct >= 0 ? C.green : C.red} />
-        <Metric C={C} label="Promedio ingreso/mes"
-          value={f(promedioIngMensual)} sub="Con IVA · meses con ventas (hasta 14m)" color={C.accent} />
+        <Metric C={C} label="Promedio cobrado/mes"
+          value={f(promedioIngMensual)} sub="Con IVA · meses con cobros (hasta 14m)" color={C.accent} />
       </div>
 
       <div
@@ -488,11 +478,11 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
           }}
         >
           <Eyebrow C={C} style={{ marginBottom: 0 }}>
-            {vista === '30d' ? 'Ingresos vs egresos (con IVA)' : 'Ingresos vs egresos · línea = balance acumulado (con IVA)'}
+            {vista === '30d' ? 'Cobrado vs egresos (con IVA)' : 'Cobrado est. vs egresos · línea = balance acumulado (con IVA)'}
           </Eyebrow>
           <div style={{ display: "flex", gap: SP.md }}>
             <div style={{ display: "flex", alignItems: "center", gap: SP.xs, fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: C.green, opacity: 0.8 }} /> Ingresos
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: C.green, opacity: 0.8 }} /> Cobrado
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: SP.xs, fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: C.red, opacity: 0.7 }} /> Egresos
@@ -516,7 +506,7 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: S.base }}>
               <thead>
                 <tr>
-                  {["Mes", "Ingresos", "Egresos", "Balance", "Balance acum.", "Facturas"].map(h => (
+                  {["Mes", "Cobrado est.", "Egresos", "Balance", "Balance acum.", "Facturas"].map(h => (
                     <th key={h} style={{ ...thStyle(C), borderBottom: `1px solid ${C.borderL}` }}>{h}</th>
                   ))}
                 </tr>
