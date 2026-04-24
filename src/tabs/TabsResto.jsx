@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   f, fS, fd, fdf, dd, fUF, clas, colorTipo, colorBanco,
   mesLabel, mesLabelLargo,
@@ -6,6 +6,8 @@ import {
 import { S, W, R, SP } from '../utils/theme.js';
 import { Card, Eyebrow, Metric } from '../components/common.jsx';
 import Proyeccion90d from '../components/Proyeccion90d.jsx';
+import FlujoConCobranzas from '../components/FlujoConCobranzas.jsx';
+import { buildFlujo13s } from '../utils/flujo13s.js';
 
 const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
 
@@ -203,9 +205,25 @@ export function TabCalendario({ C, cal, isMobile, hoy }) {
 }
 
 // ─── FLUJO DE CAJA ───────────────────────────────────────────────────────────
-export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, creditoPendiente, isMobile, hoy }) {
+export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, creditoPendiente, dap = [], ffmm = [], defontana = null, isMobile, hoy }) {
   const [vista, setVista] = useState('12m');
   const hoyD = new Date(hoy + "T12:00:00");
+
+  // Proyección 13 semanas cruzando cobranzas Defontana (si hay) con
+  // calendario/leasing/crédito. Sólo se calcula cuando hay archivos cargados.
+  const flujo13s = useMemo(() => {
+    if (!defontana?.cobranzas) return null;
+    return buildFlujo13s({
+      bancos,
+      calendario,
+      leasingDetalle,
+      creditoPendiente,
+      cobranzas: defontana.cobranzas,
+      dap,
+      ffmm,
+      hoy,
+    });
+  }, [defontana?.cobranzas, bancos, calendario, leasingDetalle, creditoPendiente, dap, ffmm, hoy]);
 
   const egresosPorMes = {};
   calendario.forEach(c => {
@@ -646,6 +664,10 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
             </div>
           </div>
         </div>
+      )}
+
+      {flujo13s && (
+        <FlujoConCobranzas C={C} isMobile={isMobile} flujo={flujo13s} />
       )}
     </div>
   );
