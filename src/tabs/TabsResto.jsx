@@ -303,9 +303,16 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
   }));
 
   const mesAct = hoy.substring(0, 7);
-  const ingresoMesAct = ventasPorMes[mesAct] || 0;
+  // Mes anterior para estimar cobros de caja (plazo de cobro ~30 días:
+  // lo que cobramos este mes viene de facturas emitidas el mes pasado).
+  const [mesActY, mesActM] = mesAct.split('-').map(Number);
+  const mesAntD = new Date(mesActY, mesActM - 2, 1);
+  const mesAnt = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth() + 1).padStart(2, '0')}`;
+
+  const facturadoMesAct = ventasPorMes[mesAct] || 0;   // emitido este mes
+  const cobradoMesAct = ventasPorMes[mesAnt] || 0;     // cobrado este mes (lag 30d)
   const egresoMesAct = (egresosPorMes[mesAct] || 0) + cuotaLeasingMes + cuotaCreditoMes;
-  const netoMesAct = ingresoMesAct - egresoMesAct;
+  const balanceMesAct = cobradoMesAct - egresoMesAct;  // balance de caja real
   const promedioIngMensual = data12.filter(d => d.ingreso > 0).reduce((s, d) => s + d.ingreso, 0)
     / Math.max(data12.filter(d => d.ingreso > 0).length, 1);
   const mejorMes = [...data12].sort((a, b) => b.neto - a.neto)[0];
@@ -422,13 +429,17 @@ export function TabFlujoCaja({ C, bancos, ventas, calendario, leasingDetalle, cr
 
       <div style={{ display: "flex", gap: SP.md, flexWrap: "wrap" }}>
         <Metric C={C}
-          label={`Ingresos ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
-          value={ingresoMesAct > 0 ? f(ingresoMesAct) : "Sin datos"}
-          sub="Facturación con IVA" color={C.green} />
+          label={`Facturado ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
+          value={facturadoMesAct > 0 ? f(facturadoMesAct) : "Sin datos"}
+          sub="Ventas emitidas este mes (con IVA)" color={C.green} />
+        <Metric C={C}
+          label={`Cobrado est. ${new Date(mesAct + "-15").toLocaleDateString("es-CL", { month: "long" })}`}
+          value={cobradoMesAct > 0 ? f(cobradoMesAct) : "Sin datos"}
+          sub="Facturado mes anterior (cobro ~30d después)" color={C.teal} />
         <Metric C={C} label="Egresos comprometidos"
           value={f(egresoMesAct)} sub="Calendario + leasing + crédito (con IVA)" color={C.red} />
         <Metric C={C} label="Balance del mes"
-          value={f(netoMesAct)} sub="Ingreso − egreso" color={netoMesAct >= 0 ? C.green : C.red} />
+          value={f(balanceMesAct)} sub="Cobrado − egreso" color={balanceMesAct >= 0 ? C.green : C.red} />
         <Metric C={C} label="Promedio ingreso/mes"
           value={f(promedioIngMensual)} sub="Con IVA · meses con ventas (hasta 14m)" color={C.accent} />
       </div>
