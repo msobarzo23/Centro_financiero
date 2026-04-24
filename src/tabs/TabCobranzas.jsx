@@ -249,16 +249,9 @@ export default function TabCobranzas({
         )}
       </div>
 
-      {/* ── Filtros ───────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SP.sm,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ position: 'relative', flex: '0 1 260px', minWidth: 180 }}>
+      {/* ── Buscador + filtros (en dos filas para no pelearse por espacio) ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm }}>
+        <div style={{ position: 'relative', maxWidth: 360 }}>
           <span
             style={{
               position: 'absolute',
@@ -286,49 +279,59 @@ export default function TabCobranzas({
               color: C.text,
               fontFamily: 'inherit',
               outline: 'none',
+              boxSizing: 'border-box',
             }}
           />
         </div>
         <div
           style={{
             display: 'flex',
-            gap: 3,
-            padding: 3,
-            background: C.surfaceAlt,
-            borderRadius: R.md,
-            border: `1px solid ${C.border}`,
+            alignItems: 'center',
+            gap: SP.sm,
+            flexWrap: 'wrap',
           }}
         >
-          {[
-            { id: 'todos', label: 'Todos' },
-            { id: 'nacionales', label: 'NAC' },
-            { id: 'internacionales', label: 'INT' },
-            { id: 'criticos', label: 'Críticos' },
-          ].map((f) => {
-            const active = filter === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                style={{
-                  padding: `${SP.xs}px ${SP.sm + 2}px`,
-                  background: active ? C.surface : 'transparent',
-                  border: `1px solid ${active ? C.borderL : 'transparent'}`,
-                  borderRadius: R.sm,
-                  fontSize: S.xs,
-                  color: active ? C.text : C.tm,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: active ? W.sb : W.m,
-                }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: S.xs, color: C.tm, marginLeft: 'auto', fontWeight: W.m }}>
-          Mostrando {clientesFiltrados.length} de {clientes.length}
+          <div
+            style={{
+              display: 'flex',
+              gap: 3,
+              padding: 3,
+              background: C.surfaceAlt,
+              borderRadius: R.md,
+              border: `1px solid ${C.border}`,
+            }}
+          >
+            {[
+              { id: 'todos', label: 'Todos' },
+              { id: 'nacionales', label: 'NAC' },
+              { id: 'internacionales', label: 'INT' },
+              { id: 'criticos', label: 'Críticos' },
+            ].map((f) => {
+              const active = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  style={{
+                    padding: `${SP.xs}px ${SP.sm + 2}px`,
+                    background: active ? C.surface : 'transparent',
+                    border: `1px solid ${active ? C.borderL : 'transparent'}`,
+                    borderRadius: R.sm,
+                    fontSize: S.xs,
+                    color: active ? C.text : C.tm,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontWeight: active ? W.sb : W.m,
+                  }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: S.xs, color: C.tm, marginLeft: 'auto', fontWeight: W.m }}>
+            Mostrando {clientesFiltrados.length} de {clientes.length}
+          </div>
         </div>
       </div>
 
