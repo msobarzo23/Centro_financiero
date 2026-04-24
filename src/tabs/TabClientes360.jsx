@@ -186,9 +186,9 @@ export default function TabClientes360({ C, isMobile, ventas, defontana, hoy }) 
         </div>
       </div>
 
-      {/* Filtros */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '0 1 260px', minWidth: 180 }}>
+      {/* Buscador + filtros (en dos filas para no superponer) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm }}>
+        <div style={{ position: 'relative', maxWidth: 360 }}>
           <span
             style={{
               position: 'absolute',
@@ -216,9 +216,11 @@ export default function TabClientes360({ C, isMobile, ventas, defontana, hoy }) 
               color: C.text,
               fontFamily: 'inherit',
               outline: 'none',
+              boxSizing: 'border-box',
             }}
           />
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, flexWrap: 'wrap' }}>
         {hayDefontana && (
           <div
             style={{
@@ -278,6 +280,7 @@ export default function TabClientes360({ C, isMobile, ventas, defontana, hoy }) 
         )}
         <div style={{ fontSize: S.xs, color: C.tm, marginLeft: 'auto', fontWeight: W.m }}>
           {clientesFiltrados.length} de {clientes.length}
+        </div>
         </div>
       </div>
 
