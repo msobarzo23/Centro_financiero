@@ -6,6 +6,7 @@ import { S, W, R, SP } from '../utils/theme.js';
 export const ALL_TABS = [
   "Resumen", "Bancos", "Calendario", "Ventas", "Flujo de Caja",
   "Inversiones", "Fondos Mutuos", "Leasing", "Crédito", "Alertas", "Calculadora",
+  "Cobranzas",
 ];
 
 export function DesktopTabs({ tab, setTab, C, nAlertas }) {
@@ -77,7 +78,7 @@ export function MobileBottomNav({ tab, setTab, C, nAlertas }) {
     { label: "Calendario", idx: 2, icon: "▦" },
     { label: "Alertas", idx: 9, icon: "!" },
   ];
-  const secundariasIdx = [3, 4, 5, 6, 7, 8, 10];
+  const secundariasIdx = [3, 4, 5, 6, 7, 8, 10, 11];
   const secLabels = secundariasIdx.map(i => ({ label: ALL_TABS[i], idx: i }));
 
   return (
