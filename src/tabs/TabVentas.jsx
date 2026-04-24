@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
 import { f, fS, fd, mesLabel } from '../utils/format.js';
+import { S, W, R, SP } from '../utils/theme.js';
+import { Card, Eyebrow } from '../components/common.jsx';
+
+const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
 
 // Pestaña Ventas: métricas, evolución mensual, top clientes, tabla de facturas.
 // `ventas` viene de data.js con { rows, porMes, porDia }.
@@ -15,7 +19,6 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
     return [...s].sort().reverse();
   }, [rows]);
 
-  // Filas filtradas por año y cliente (aplica a tabla y a rankings).
   const rowsFiltradas = useMemo(() => {
     return rows.filter((r) => {
       if (anioFiltro !== 'TODOS' && !r.fecha.startsWith(anioFiltro)) return false;
@@ -25,7 +28,6 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
     });
   }, [rows, anioFiltro, clienteFiltro]);
 
-  // ─── Métricas globales (todo en NETO) ──────────────────────────────────
   const mesActual = hoy.substring(0, 7);
   const anioActual = hoy.substring(0, 4);
   const anioPasado = String(Number(anioActual) - 1);
@@ -39,12 +41,10 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
   const facturasAnio = rowsAnio.length;
   const ticketPromedio = facturasAnio > 0 ? totalAnio / facturasAnio : 0;
 
-  // Afectas vs exentas del año (neto).
   const afectasYTD = rowsAnio.filter((r) => r.afecta).reduce((s, r) => s + r.neto, 0);
   const exentasYTD = rowsAnio.filter((r) => !r.afecta).reduce((s, r) => s + r.neto, 0);
   const pctAfectas = totalAnio > 0 ? afectasYTD / totalAnio : 0;
 
-  // Comparación año anterior: mismo mes y mismo periodo del año (hasta la fecha).
   const totalMismoMesAnioPasado = rows
     .filter((r) => r.fecha.startsWith(mesAnioPasado))
     .reduce((s, r) => s + r.neto, 0);
@@ -53,7 +53,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
       ? (totalMes - totalMismoMesAnioPasado) / totalMismoMesAnioPasado
       : null;
 
-  const mmddHoy = hoy.slice(5); // "MM-DD" del año actual
+  const mmddHoy = hoy.slice(5);
   const totalAnioPasadoALaFecha = rows
     .filter((r) => r.fecha.startsWith(anioPasado) && r.fecha.slice(5) <= mmddHoy)
     .reduce((s, r) => s + r.neto, 0);
@@ -62,7 +62,6 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
       ? (totalAnio - totalAnioPasadoALaFecha) / totalAnioPasadoALaFecha
       : null;
 
-  // ─── Top clientes por monto neto ───────────────────────────────────────
   const topClientes = useMemo(() => {
     const base = anioFiltro === 'TODOS' ? rows : rowsAnio;
     const map = {};
@@ -77,8 +76,6 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
       .slice(0, 10);
   }, [rows, rowsAnio, anioFiltro]);
 
-  // ─── Gráfico evolución mensual con YoY ─────────────────────────────────
-  // Usa porMes.neto y superpone los mismos meses del año anterior.
   const porMesNetoMap = useMemo(() => {
     const m = {};
     porMes.forEach((r) => (m[r.mes] = r.neto));
@@ -103,7 +100,6 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
     0,
   );
 
-  // Últimas facturas (máximo 50 en la tabla para no sobrecargar).
   const facturasTabla = useMemo(
     () =>
       [...rowsFiltradas]
@@ -114,63 +110,36 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
 
   if (rows.length === 0) {
     return (
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 10,
-          padding: 24,
-          border: `0.5px solid ${C.border}`,
-          textAlign: 'center',
-          color: C.td,
-          fontSize: 13,
-        }}
-      >
+      <Card C={C} style={{ textAlign: 'center', color: C.td, fontSize: S.base, padding: SP.xl2 }}>
         Sin datos de ventas disponibles. Verifica que la hoja esté publicada.
-      </div>
+      </Card>
     );
   }
 
   const metricCard = (label, value, sub, color) => (
-    <div
-      style={{
-        background: C.surface,
-        borderRadius: 10,
-        padding: isMobile ? '12px 14px' : '14px 16px',
-        border: `0.5px solid ${C.border}`,
-        flex: 1,
-        minWidth: isMobile ? 140 : 160,
-      }}
-    >
+    <Card C={C} pad={isMobile ? "sm" : "md"} style={{ flex: 1, minWidth: isMobile ? 150 : 180 }}>
+      <Eyebrow C={C}>{label}</Eyebrow>
       <div
         style={{
-          fontSize: 11,
-          color: C.tm,
-          marginBottom: 4,
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: isMobile ? 18 : 22,
-          fontWeight: 600,
+          fontSize: isMobile ? S.xl : S.xl2,
+          fontWeight: W.sb,
           color: color || C.text,
-          fontFamily: 'monospace',
-          lineHeight: 1.2,
+          fontFamily: MONO,
+          lineHeight: 1.15,
+          letterSpacing: "-0.3px",
         }}
       >
         {value}
       </div>
-      {sub && <div style={{ fontSize: 11, color: C.td, marginTop: 3 }}>{sub}</div>}
-    </div>
+      {sub && (
+        <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>{sub}</div>
+      )}
+    </Card>
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Métricas principales (todas en neto) */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md }}>
+      <div style={{ display: 'flex', gap: SP.md, flexWrap: 'wrap' }}>
         {metricCard(
           'Facturado mes',
           f(totalMes),
@@ -198,40 +167,26 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
 
       {/* Gráfico evolución mensual */}
       {mesesGrafico.length > 0 && (
-        <div
-          style={{
-            background: C.surface,
-            borderRadius: 10,
-            padding: '14px 16px',
-            border: `0.5px solid ${C.border}`,
-          }}
-        >
+        <Card C={C}>
           <div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'baseline',
-              marginBottom: 12,
-              gap: 8,
+              marginBottom: SP.md,
+              gap: SP.sm,
               flexWrap: 'wrap',
             }}
           >
-            <div
-              style={{
-                fontSize: 11,
-                color: C.tm,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
+            <Eyebrow C={C} style={{ marginBottom: 0 }}>
               Evolución últimos {mesesGrafico.length} meses · neto
-            </div>
-            <div style={{ display: 'flex', gap: 10, fontSize: 10, color: C.td }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            </Eyebrow>
+            <div style={{ display: 'flex', gap: SP.md, fontSize: S.xs, color: C.td, fontWeight: W.m }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: SP.xs }}>
                 <span style={{ width: 10, height: 10, background: C.teal, borderRadius: 2 }} />
                 {anioActual}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: SP.xs }}>
                 <span
                   style={{
                     width: 10,
@@ -247,7 +202,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
           </div>
           <svg
             viewBox={`0 0 ${Math.max(mesesGrafico.length * 50, 200)} 160`}
-            style={{ width: '100%', height: 160, overflow: 'visible' }}
+            style={{ width: '100%', height: 180, overflow: 'visible' }}
           >
             {[0.25, 0.5, 0.75, 1].map((p) => (
               <line
@@ -278,7 +233,7 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                       height={hYoY}
                       fill={C.teal}
                       opacity={0.25}
-                      rx={2}
+                      rx={3}
                     />
                   )}
                   <rect
@@ -288,15 +243,15 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                     height={h}
                     fill={esHoy ? C.accent : C.teal}
                     opacity={0.85}
-                    rx={2}
+                    rx={3}
                   />
                   <text
                     x={x + 17}
                     y={y - 4}
                     textAnchor="middle"
-                    fontSize="9"
-                    fill={C.td}
-                    fontWeight={esHoy ? 700 : 400}
+                    fontSize="10"
+                    fill={esHoy ? C.text : C.tm}
+                    fontWeight={esHoy ? 700 : 500}
                   >
                     {fS(m.neto)}
                   </text>
@@ -304,8 +259,9 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                     x={x + 17}
                     y={152}
                     textAnchor="middle"
-                    fontSize="10"
-                    fill={esHoy ? C.accent : C.td}
+                    fontSize="11"
+                    fontWeight={esHoy ? 700 : 500}
+                    fill={esHoy ? C.accent : C.tm}
                   >
                     {mesLabel(m.mes)}
                   </text>
@@ -313,14 +269,14 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
               );
             })}
           </svg>
-        </div>
+        </Card>
       )}
 
       {/* Filtros */}
       <div
         style={{
           display: 'flex',
-          gap: 8,
+          gap: SP.sm,
           flexWrap: 'wrap',
           alignItems: 'center',
         }}
@@ -329,12 +285,14 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
           value={anioFiltro}
           onChange={(e) => setAnioFiltro(e.target.value)}
           style={{
-            padding: '6px 12px',
-            borderRadius: 6,
-            fontSize: 12,
+            padding: `${SP.sm}px ${SP.md}px`,
+            borderRadius: R.md,
+            fontSize: S.base,
+            fontWeight: W.m,
             background: C.surfaceAlt,
             color: C.text,
-            border: `0.5px solid ${C.border}`,
+            border: `1px solid ${C.border}`,
+            cursor: 'pointer',
           }}
         >
           <option value="TODOS">Todos los años</option>
@@ -347,70 +305,47 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
         <input
           value={clienteFiltro}
           onChange={(e) => setClienteFiltro(e.target.value)}
-          placeholder="Buscar cliente..."
+          placeholder="Buscar cliente…"
           style={{
             flex: 1,
-            minWidth: 180,
-            padding: '6px 12px',
-            borderRadius: 6,
-            fontSize: 12,
+            minWidth: 200,
+            padding: `${SP.sm}px ${SP.md}px`,
+            borderRadius: R.md,
+            fontSize: S.base,
+            fontWeight: W.m,
             background: C.surfaceAlt,
             color: C.text,
-            border: `0.5px solid ${C.border}`,
+            border: `1px solid ${C.border}`,
+            outline: 'none',
           }}
         />
       </div>
 
       {/* Top clientes */}
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 10,
-          padding: '14px 16px',
-          border: `0.5px solid ${C.border}`,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 10,
-            flexWrap: 'wrap',
-            gap: 8,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              color: C.tm,
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-            }}
-          >
-            Top 10 clientes por facturación neta · {anioFiltro === 'TODOS' ? 'histórico' : anioFiltro}
-          </div>
-        </div>
+      <Card C={C}>
+        <Eyebrow C={C}>
+          Top 10 clientes por facturación neta · {anioFiltro === 'TODOS' ? 'histórico' : anioFiltro}
+        </Eyebrow>
         {topClientes.map((c, i) => (
           <div
             key={c.cliente}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              padding: '8px 0',
-              borderTop: i > 0 ? `0.5px solid ${C.border}` : 'none',
+              gap: SP.md,
+              padding: `${SP.sm}px 0`,
+              borderTop: i > 0 ? `1px solid ${C.border}` : 'none',
             }}
           >
             <div
               style={{
-                width: 22,
-                height: 22,
+                width: 26,
+                height: 26,
                 borderRadius: '50%',
                 background: i < 3 ? C.accentD : C.surfaceAlt,
                 color: i < 3 ? C.accent : C.tm,
-                fontSize: 11,
-                fontWeight: 600,
+                fontSize: S.sm,
+                fontWeight: W.b,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -422,8 +357,9 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: S.base,
                   color: C.text,
+                  fontWeight: W.m,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -431,54 +367,40 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
               >
                 {c.cliente}
               </div>
-              <div style={{ fontSize: 11, color: C.td }}>
+              <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
                 {c.facturas} factura{c.facturas !== 1 ? 's' : ''}
               </div>
             </div>
             <div
               style={{
-                fontSize: 14,
-                fontWeight: 600,
+                fontSize: S.md,
+                fontWeight: W.sb,
                 color: C.text,
-                fontFamily: 'monospace',
+                fontFamily: MONO,
                 textAlign: 'right',
+                letterSpacing: "-0.2px",
               }}
             >
               {fS(c.monto)}
             </div>
           </div>
         ))}
-      </div>
+      </Card>
 
       {/* Últimas facturas */}
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 10,
-          padding: isMobile ? '12px' : '14px 16px',
-          border: `0.5px solid ${C.border}`,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            color: C.tm,
-            marginBottom: 10,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
+      <Card C={C} pad={isMobile ? "sm" : "md"}>
+        <Eyebrow C={C}>
           Últimas facturas ({facturasTabla.length} de {rowsFiltradas.length})
-        </div>
+        </Eyebrow>
         {isMobile ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SP.xs }}>
             {facturasTabla.map((r, i) => (
               <div
                 key={`${r.folio}-${i}`}
                 style={{
                   background: C.surfaceAlt,
-                  borderRadius: 8,
-                  padding: '10px 12px',
+                  borderRadius: R.md,
+                  padding: `${SP.sm}px ${SP.md}px`,
                 }}
               >
                 <div
@@ -486,30 +408,33 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'baseline',
-                    marginBottom: 4,
+                    marginBottom: SP.xs,
                   }}
                 >
-                  <span style={{ fontSize: 12, color: C.tm }}>
+                  <span style={{ fontSize: S.xs, color: C.tm, fontWeight: W.m }}>
                     #{r.folio} · {fd(r.fecha)}
                   </span>
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: S.xxs,
                       color: r.afecta ? C.accent : C.amberT,
-                      fontWeight: 500,
+                      fontWeight: W.b,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
                     }}
                   >
-                    {r.afecta ? 'AFECTA' : 'EXENTA'}
+                    {r.afecta ? 'Afecta' : 'Exenta'}
                   </span>
                 </div>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: S.base,
                     color: C.text,
+                    fontWeight: W.m,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    marginBottom: 4,
+                    marginBottom: SP.xs,
                   }}
                 >
                   {r.razonSocial}
@@ -523,10 +448,11 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                 >
                   <div
                     style={{
-                      fontSize: 14,
-                      fontWeight: 600,
+                      fontSize: S.md,
+                      fontWeight: W.sb,
                       color: C.text,
-                      fontFamily: 'monospace',
+                      fontFamily: MONO,
+                      letterSpacing: "-0.2px",
                     }}
                   >
                     {f(r.neto)}
@@ -534,9 +460,10 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
                   {r.afecta && (
                     <div
                       style={{
-                        fontSize: 11,
+                        fontSize: S.xs,
                         color: C.td,
-                        fontFamily: 'monospace',
+                        fontFamily: MONO,
+                        fontWeight: W.m,
                       }}
                     >
                       c/IVA {fS(r.montoReal)}
@@ -547,84 +474,95 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
             ))}
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: `0.5px solid ${C.borderL}` }}>
-                {['Fecha', 'Folio', 'Cliente', 'Tipo', 'Neto', 'Total c/IVA'].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 12px',
-                      textAlign: h === 'Neto' || h === 'Total c/IVA' ? 'right' : 'left',
-                      fontSize: 11,
-                      color: C.td,
-                      fontWeight: 500,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {facturasTabla.map((r, i) => (
-                <tr key={`${r.folio}-${i}`} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                  <td style={{ padding: '7px 12px', color: C.tm, fontSize: 12 }}>{fd(r.fecha)}</td>
-                  <td style={{ padding: '7px 12px', color: C.td, fontSize: 12 }}>{r.folio}</td>
-                  <td
-                    style={{
-                      padding: '7px 12px',
-                      color: C.text,
-                      maxWidth: 260,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {r.razonSocial}
-                  </td>
-                  <td style={{ padding: '7px 12px' }}>
-                    <span
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: S.base }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.borderL}` }}>
+                  {['Fecha', 'Folio', 'Cliente', 'Tipo', 'Neto', 'Total c/IVA'].map((h) => (
+                    <th
+                      key={h}
                       style={{
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        fontSize: 10,
-                        fontWeight: 500,
-                        background: r.afecta ? C.accentD : C.amberD,
-                        color: r.afecta ? C.accent : C.amberT,
+                        padding: `${SP.sm}px ${SP.md}px`,
+                        textAlign: h === 'Neto' || h === 'Total c/IVA' ? 'right' : 'left',
+                        fontSize: S.xs,
+                        color: C.tm,
+                        fontWeight: W.sb,
+                        textTransform: 'uppercase',
+                        letterSpacing: "0.6px",
                       }}
                     >
-                      {r.afecta ? 'AFECTA' : 'EXENTA'}
-                    </span>
-                  </td>
-                  <td
-                    style={{
-                      padding: '7px 12px',
-                      textAlign: 'right',
-                      color: C.tm,
-                      fontFamily: 'monospace',
-                    }}
-                  >
-                    {fS(r.neto)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '7px 12px',
-                      textAlign: 'right',
-                      fontWeight: 500,
-                      color: C.text,
-                      fontFamily: 'monospace',
-                    }}
-                  >
-                    {fS(r.montoReal)}
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {facturasTabla.map((r, i) => (
+                  <tr key={`${r.folio}-${i}`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: `${SP.sm}px ${SP.md}px`, color: C.tm, fontSize: S.sm, fontWeight: W.m }}>
+                      {fd(r.fecha)}
+                    </td>
+                    <td style={{ padding: `${SP.sm}px ${SP.md}px`, color: C.td, fontSize: S.sm, fontWeight: W.m }}>
+                      {r.folio}
+                    </td>
+                    <td
+                      style={{
+                        padding: `${SP.sm}px ${SP.md}px`,
+                        color: C.text,
+                        fontWeight: W.m,
+                        maxWidth: 280,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {r.razonSocial}
+                    </td>
+                    <td style={{ padding: `${SP.sm}px ${SP.md}px` }}>
+                      <span
+                        style={{
+                          padding: `2px ${SP.sm}px`,
+                          borderRadius: R.sm,
+                          fontSize: S.xxs,
+                          fontWeight: W.sb,
+                          background: r.afecta ? C.accentD : C.amberD,
+                          color: r.afecta ? C.accent : C.amberT,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.4px",
+                        }}
+                      >
+                        {r.afecta ? 'Afecta' : 'Exenta'}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        padding: `${SP.sm}px ${SP.md}px`,
+                        textAlign: 'right',
+                        color: C.tm,
+                        fontFamily: MONO,
+                        fontWeight: W.m,
+                      }}
+                    >
+                      {fS(r.neto)}
+                    </td>
+                    <td
+                      style={{
+                        padding: `${SP.sm}px ${SP.md}px`,
+                        textAlign: 'right',
+                        fontWeight: W.sb,
+                        color: C.text,
+                        fontFamily: MONO,
+                      }}
+                    >
+                      {fS(r.montoReal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

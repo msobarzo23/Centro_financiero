@@ -1,4 +1,8 @@
 import { useIndicadores } from '../utils/indicadores.js';
+import { S, W, R, SP } from '../utils/theme.js';
+import { Card, Eyebrow } from './common.jsx';
+
+const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
 
 const fmtCLP = (n) =>
   n != null
@@ -6,33 +10,37 @@ const fmtCLP = (n) =>
     : '—';
 
 // Badge compacto para el header: UF + USD en una línea.
-export function IndicadoresBadge({ C, compacto = false }) {
+export function IndicadoresBadge({ C }) {
   const { data, isLoading, error } = useIndicadores();
 
   if (isLoading || error || !data) return null;
-
-  const uf = fmtCLP(data.uf);
-  const dolar = fmtCLP(data.dolar);
 
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: compacto ? 8 : 10,
-        padding: compacto ? '4px 8px' : '4px 10px',
-        borderRadius: 6,
+        gap: SP.md,
+        padding: `${SP.xs}px ${SP.md}px`,
+        borderRadius: R.md,
         background: C.surfaceAlt,
-        border: `0.5px solid ${C.border}`,
-        fontSize: 11,
+        border: `1px solid ${C.border}`,
+        fontSize: S.xs,
+        fontWeight: W.m,
       }}
     >
       <span style={{ color: C.td }}>
-        UF <span style={{ color: C.text, fontWeight: 600, fontFamily: 'monospace' }}>{uf}</span>
+        UF{' '}
+        <span style={{ color: C.text, fontWeight: W.sb, fontFamily: MONO }}>
+          {fmtCLP(data.uf)}
+        </span>
       </span>
       <span style={{ color: C.border }}>·</span>
       <span style={{ color: C.td }}>
-        USD <span style={{ color: C.text, fontWeight: 600, fontFamily: 'monospace' }}>{dolar}</span>
+        USD{' '}
+        <span style={{ color: C.text, fontWeight: W.sb, fontFamily: MONO }}>
+          {fmtCLP(data.dolar)}
+        </span>
       </span>
     </div>
   );
@@ -44,35 +52,17 @@ export function IndicadoresCard({ C }) {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 10,
-          padding: '14px 16px',
-          border: `0.5px solid ${C.border}`,
-          color: C.td,
-          fontSize: 12,
-        }}
-      >
+      <Card C={C} style={{ color: C.td, fontSize: S.sm, fontWeight: W.m }}>
         Cargando indicadores…
-      </div>
+      </Card>
     );
   }
 
   if (error || !data) {
     return (
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 10,
-          padding: '14px 16px',
-          border: `0.5px solid ${C.border}`,
-          color: C.td,
-          fontSize: 12,
-        }}
-      >
+      <Card C={C} style={{ color: C.td, fontSize: S.sm, fontWeight: W.m }}>
         Indicadores no disponibles.
-      </div>
+      </Card>
     );
   }
 
@@ -93,36 +83,20 @@ export function IndicadoresCard({ C }) {
   ];
 
   return (
-    <div
-      style={{
-        background: C.surface,
-        borderRadius: 10,
-        padding: '14px 16px',
-        border: `0.5px solid ${C.border}`,
-      }}
-    >
+    <Card C={C}>
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          marginBottom: 10,
+          marginBottom: SP.md,
           flexWrap: 'wrap',
-          gap: 6,
+          gap: SP.xs,
         }}
       >
-        <div
-          style={{
-            fontSize: 11,
-            color: C.tm,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Indicadores del día
-        </div>
+        <Eyebrow C={C} style={{ marginBottom: 0 }}>Indicadores del día</Eyebrow>
         {fechaStr && (
-          <div style={{ fontSize: 10, color: C.td }}>
+          <div style={{ fontSize: S.xxs, color: C.td, fontWeight: W.m }}>
             Fuente: mindicador.cl · {fechaStr}
           </div>
         )}
@@ -130,8 +104,8 @@ export function IndicadoresCard({ C }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
-          gap: 8,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: SP.sm,
         }}
       >
         {indicadores.map((i) => (
@@ -139,27 +113,29 @@ export function IndicadoresCard({ C }) {
             key={i.label}
             style={{
               background: C.surfaceAlt,
-              borderRadius: 8,
-              padding: '10px 12px',
+              borderRadius: R.md,
+              padding: `${SP.sm}px ${SP.md}px`,
             }}
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: S.xxs,
                 color: C.tm,
                 marginBottom: 3,
                 textTransform: 'uppercase',
-                letterSpacing: '0.5px',
+                letterSpacing: '0.6px',
+                fontWeight: W.sb,
               }}
             >
               {i.label}
             </div>
             <div
               style={{
-                fontSize: 15,
-                fontWeight: 600,
+                fontSize: S.lg,
+                fontWeight: W.sb,
                 color: i.color,
-                fontFamily: 'monospace',
+                fontFamily: MONO,
+                letterSpacing: "-0.3px",
               }}
             >
               {i.valor}
@@ -167,6 +143,6 @@ export function IndicadoresCard({ C }) {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

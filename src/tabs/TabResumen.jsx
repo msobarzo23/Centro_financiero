@@ -1,4 +1,6 @@
-import { f, fS, fd, fdf, dd, clas, colorTipo, mesLabel } from '../utils/format.js';
+import { f, fS, fd, fdf, dd, clas, colorTipo } from '../utils/format.js';
+import { S, W, R, SP, eyebrow, bigNumber } from '../utils/theme.js';
+import { Card, Eyebrow, SectionTitle } from '../components/common.jsx';
 import { GraficoCobertura, GraficoDonaDap } from '../components/Graficos.jsx';
 import { IndicadoresCard } from '../components/Indicadores.jsx';
 
@@ -7,7 +9,7 @@ export default function TabResumen({
   leasingDetalle, leasingResumen,
   creditoPendiente, saldoInsoluto, alertas,
   isMobile, hoy,
-  onGoTab, // navega a otra pestaña al tocar "ver"
+  onGoTab,
 }) {
   const bancosHoy = bancos.filter(b => b.fecha === hoy);
   const saldosIni = bancosHoy.filter(b => b.descripcion === "Saldo Inicial");
@@ -19,7 +21,9 @@ export default function TabResumen({
   // Saldo de ayer (para delta)
   const fechasDisp = [...new Set(bancos.map(b => b.fecha))].sort();
   const idxHoy = fechasDisp.indexOf(hoy);
-  const fechaAyer = idxHoy > 0 ? fechasDisp[idxHoy - 1] : (fechasDisp.length > 0 && fechasDisp[fechasDisp.length - 1] < hoy ? fechasDisp[fechasDisp.length - 1] : null);
+  const fechaAyer = idxHoy > 0
+    ? fechasDisp[idxHoy - 1]
+    : (fechasDisp.length > 0 && fechasDisp[fechasDisp.length - 1] < hoy ? fechasDisp[fechasDisp.length - 1] : null);
   const ultimoAyer = {};
   if (fechaAyer) {
     bancos.filter(b => b.fecha === fechaAyer).forEach(b => {
@@ -32,8 +36,6 @@ export default function TabResumen({
   // DAPs
   const dapsV = dap.filter(d => d.vigente === "si" || d.vigente === "sí");
   const totalDAP = dapsV.reduce((s, d) => s + d.montoInicial, 0);
-  const totalGanDAP = dapsV.reduce((s, d) => s + d.ganancia, 0);
-  const ganHistorica = dap.reduce((s, d) => s + d.ganancia, 0);
   const trab = dapsV.filter(d => clas(d.tipo) === 'trabajo');
   const inv = dapsV.filter(d => clas(d.tipo) === 'inversion');
   const cred = dapsV.filter(d => clas(d.tipo) === 'credito');
@@ -75,65 +77,73 @@ export default function TabResumen({
     tipo === "atencion" ? { bg: C.amberD, border: C.amber + "55", text: C.amberT } :
     { bg: C.accentD, border: C.accent + "55", text: C.accent };
 
+  // Banner de estado (mobile + desktop usan el mismo)
+  const StatusBanner = () => (
+    <div
+      style={{
+        display: "flex", alignItems: "center", gap: SP.sm,
+        padding: `${SP.sm}px ${SP.md}px`,
+        borderRadius: R.md,
+        background: noData ? C.amberD : semCubierta ? C.greenD : C.amberD,
+        border: `1px solid ${noData ? C.amber + "44" : semCubierta ? C.green + "44" : C.amber + "44"}`,
+      }}
+    >
+      <span style={{ fontSize: S.md }}>
+        {noData ? "○" : semCubierta ? "●" : "◐"}
+      </span>
+      <span
+        style={{
+          fontSize: S.sm, fontWeight: W.sb,
+          color: noData ? C.amberT : semCubierta ? C.greenT : C.amberT,
+        }}
+      >
+        {noData
+          ? "Sin saldos hoy — ingresa en Google Sheets"
+          : semCubierta
+            ? "Semana cubierta — compromisos al día"
+            : `Faltan ${f(faltaSem)} para cubrir la semana`}
+      </span>
+    </div>
+  );
+
   // ─── LAYOUT MOBILE ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-        {/* Banner semana */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 12px", borderRadius: 8,
-          background: noData ? C.amberD : semCubierta ? C.greenD : C.amberD,
-          border: `0.5px solid ${noData ? C.amber + "44" : semCubierta ? C.green + "44" : C.amber + "44"}`,
-        }}>
-          <span style={{ fontSize: 14 }}>{noData ? "○" : semCubierta ? "●" : "◐"}</span>
-          <span style={{
-            fontSize: 12, fontWeight: 500,
-            color: noData ? C.amberT : semCubierta ? C.greenT : C.amberT,
-          }}>
-            {noData ? "Sin saldos hoy — ingresa en Google Sheets"
-             : semCubierta ? "Semana cubierta"
-             : `Faltan ${f(faltaSem)} esta semana`}
-          </span>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: SP.md }}>
+        <StatusBanner />
 
         {/* HÉROE: Saldo hoy */}
-        <div style={{
-          background: C.surface, borderRadius: 12,
-          padding: "18px 18px 16px",
-          border: `0.5px solid ${C.border}`,
-        }}
-          onClick={() => onGoTab && onGoTab(1)}
-        >
-          <div style={{
-            fontSize: 11, color: C.tm,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-            marginBottom: 4,
-          }}>Saldo bancos hoy</div>
-          <div style={{
-            fontSize: 30, fontWeight: 600,
-            fontFamily: "monospace", letterSpacing: "-0.5px",
-            color: saldoAct > 0 ? C.text : C.td,
-            lineHeight: 1.1,
-          }}>
+        <Card C={C} pad="lg" onClick={() => onGoTab && onGoTab(1)}>
+          <Eyebrow C={C}>Saldo bancos hoy</Eyebrow>
+          <div
+            style={{
+              ...bigNumber(C, saldoAct > 0 ? C.text : C.td),
+              fontSize: S.xl4, letterSpacing: "-1px",
+            }}
+          >
             {saldoAct > 0 ? f(saldoAct) : "Sin datos"}
           </div>
           {deltaHoyAyer !== null && (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-              <span style={{
-                fontSize: 12, fontWeight: 500,
-                color: deltaHoyAyer >= 0 ? C.green : C.red,
-              }}>
+            <div style={{ display: "flex", gap: SP.sm, alignItems: "center", marginTop: SP.sm }}>
+              <span
+                style={{
+                  fontSize: S.sm, fontWeight: W.sb,
+                  color: deltaHoyAyer >= 0 ? C.green : C.red,
+                }}
+              >
                 {deltaHoyAyer >= 0 ? "+" : ""}{fS(deltaHoyAyer)}
               </span>
-              <span style={{ fontSize: 11, color: C.td }}>vs {fd(fechaAyer)}</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, color: C.accent }}>Ver →</span>
+              <span style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
+                vs {fd(fechaAyer)}
+              </span>
+              <span style={{ marginLeft: "auto", fontSize: S.xs, color: C.accent, fontWeight: W.sb }}>
+                Ver →
+              </span>
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* Alerta más urgente */}
+        {/* Alerta principal */}
         {alertas.length > 0 && (() => {
           const a = alertas[0];
           const col = colorAlerta(a.tipo);
@@ -141,34 +151,54 @@ export default function TabResumen({
             <div
               onClick={() => onGoTab && onGoTab(9)}
               style={{
-                background: col.bg, border: `0.5px solid ${col.border}`,
-                borderRadius: 10, padding: "12px 14px",
-                display: "flex", gap: 10, alignItems: "center",
-              }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: col.text + "22",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, fontSize: 15,
-              }}>{a.icono}</div>
+                background: col.bg,
+                border: `1px solid ${col.border}`,
+                borderRadius: R.lg,
+                padding: `${SP.md}px ${SP.md}px`,
+                display: "flex",
+                gap: SP.md,
+                alignItems: "center",
+                cursor: "pointer",
+              }}
+            >
+              <div
+                style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: col.text + "22",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, fontSize: S.lg,
+                }}
+              >
+                {a.icono}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 10, fontWeight: 700, color: col.text,
-                  textTransform: "uppercase", letterSpacing: "0.3px",
-                }}>
+                <div
+                  style={{
+                    fontSize: S.xxs, fontWeight: W.b, color: col.text,
+                    textTransform: "uppercase", letterSpacing: "0.5px",
+                  }}
+                >
                   {a.tipo === "urgente" ? "Urgente" : a.tipo === "atencion" ? "Atención" : "Info"}
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginTop: 1 }}>
+                <div style={{ fontSize: S.base, fontWeight: W.sb, color: C.text, marginTop: 1 }}>
                   {a.titulo}
                 </div>
-                <div style={{
-                  fontSize: 11, color: C.tm, marginTop: 1,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{a.mensaje}</div>
+                <div
+                  style={{
+                    fontSize: S.xs, color: C.tm, marginTop: 2,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                >
+                  {a.mensaje}
+                </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 18, fontWeight: 600, color: col.text, lineHeight: 1 }}>{a.dias}</div>
-                <div style={{ fontSize: 9, color: col.text, opacity: 0.7 }}>días</div>
+                <div style={{ fontSize: S.xl, fontWeight: W.sb, color: col.text, lineHeight: 1 }}>
+                  {a.dias}
+                </div>
+                <div style={{ fontSize: S.xxs, color: col.text, opacity: 0.7, fontWeight: W.m }}>
+                  días
+                </div>
               </div>
             </div>
           );
@@ -178,278 +208,277 @@ export default function TabResumen({
           <div
             onClick={() => onGoTab && onGoTab(9)}
             style={{
-              padding: "8px 14px", borderRadius: 8,
+              padding: `${SP.sm}px ${SP.md}px`,
+              borderRadius: R.md,
               background: C.surfaceAlt,
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
-            <span style={{ fontSize: 12, color: C.tm }}>
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: S.sm, color: C.tm, fontWeight: W.m }}>
               +{alertas.length - 1} alerta{alertas.length - 1 !== 1 ? "s" : ""} más
             </span>
-            <span style={{ fontSize: 11, color: C.accent, fontWeight: 500 }}>Ver todas →</span>
+            <span style={{ fontSize: S.xs, color: C.accent, fontWeight: W.sb }}>Ver todas →</span>
           </div>
         )}
 
-        {/* Indicadores económicos (móvil) */}
-        <IndicadoresCard C={C}/>
+        <IndicadoresCard C={C} />
 
-        {/* Métricas DAP + FFMM 2x1 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <div
-            onClick={() => onGoTab && onGoTab(5)}
-            style={{
-              background: C.surface, borderRadius: 10,
-              padding: "12px 14px", border: `0.5px solid ${C.border}`,
-            }}>
-            <div style={{
-              fontSize: 10, color: C.tm, marginBottom: 4,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>En DAP</div>
-            <div style={{
-              fontSize: 18, fontWeight: 600, color: C.amber,
-              fontFamily: "monospace", lineHeight: 1.2,
-            }}>{fS(totalDAP)}</div>
-            <div style={{ fontSize: 10, color: C.td, marginTop: 2 }}>
+        {/* DAP + FFMM */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.sm }}>
+          <Card C={C} pad="sm" onClick={() => onGoTab && onGoTab(5)}>
+            <Eyebrow C={C}>En DAP</Eyebrow>
+            <div style={{ ...bigNumber(C, C.amber), fontSize: S.xl }}>{fS(totalDAP)}</div>
+            <div style={{ fontSize: S.xxs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
               {dapsV.length} vigentes
             </div>
-          </div>
-          <div
-            onClick={() => onGoTab && onGoTab(6)}
-            style={{
-              background: C.surface, borderRadius: 10,
-              padding: "12px 14px", border: `0.5px solid ${C.border}`,
-            }}>
-            <div style={{
-              fontSize: 10, color: C.tm, marginBottom: 4,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>Fondos mutuos</div>
-            <div style={{
-              fontSize: 18, fontWeight: 600, color: C.purple,
-              fontFamily: "monospace", lineHeight: 1.2,
-            }}>{fS(totalFFMMAct > 0 ? totalFFMMAct : totalFFMMInv)}</div>
+          </Card>
+          <Card C={C} pad="sm" onClick={() => onGoTab && onGoTab(6)}>
+            <Eyebrow C={C}>Fondos mutuos</Eyebrow>
+            <div style={{ ...bigNumber(C, C.purple), fontSize: S.xl }}>
+              {fS(totalFFMMAct > 0 ? totalFFMMAct : totalFFMMInv)}
+            </div>
             {totalGanFFMM > 0 && (
-              <div style={{ fontSize: 10, color: C.green, marginTop: 2 }}>+{fS(totalGanFFMM)}</div>
+              <div style={{ fontSize: S.xxs, color: C.green, marginTop: SP.xs, fontWeight: W.sb }}>
+                +{fS(totalGanFFMM)}
+              </div>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Cobertura mes actual */}
-        <div
-          onClick={() => onGoTab && onGoTab(2)}
-          style={{
-            background: C.surface, borderRadius: 10,
-            padding: "14px 16px", border: `0.5px solid ${C.border}`,
-          }}>
-          <div style={{
-            display: "flex", justifyContent: "space-between",
-            alignItems: "baseline", marginBottom: 8,
-          }}>
-            <div style={{
-              fontSize: 11, color: C.tm,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>{mesLabelAct} cubierto</div>
-            <div style={{ fontSize: 11, color: C.td }}>
+        {/* Cobertura mes */}
+        <Card C={C} onClick={() => onGoTab && onGoTab(2)}>
+          <div
+            style={{
+              display: "flex", justifyContent: "space-between",
+              alignItems: "baseline", marginBottom: SP.sm,
+            }}
+          >
+            <Eyebrow C={C} style={{ marginBottom: 0 }}>{mesLabelAct} cubierto</Eyebrow>
+            <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
               {fS(guarMes)} / {fS(compMes)}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              flex: 1, height: 8, background: C.surfaceAlt,
-              borderRadius: 4, overflow: "hidden",
-            }}>
-              <div style={{
-                width: `${Math.min(pctMes * 100, 100)}%`, height: "100%",
-                background: pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amber : C.red,
-                borderRadius: 4,
-              }}/>
+          <div style={{ display: "flex", alignItems: "center", gap: SP.md }}>
+            <div
+              style={{
+                flex: 1, height: 8, background: C.surfaceAlt,
+                borderRadius: 4, overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(pctMes * 100, 100)}%`,
+                  height: "100%",
+                  background: pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amber : C.red,
+                  borderRadius: 4,
+                  transition: "width 300ms ease",
+                }}
+              />
             </div>
-            <span style={{
-              fontSize: 14, fontWeight: 600,
-              color: pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amberT : C.red,
-            }}>{Math.round(pctMes * 100)}%</span>
+            <span
+              style={{
+                fontSize: S.md, fontWeight: W.sb,
+                color: pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amberT : C.red,
+                minWidth: 44, textAlign: "right",
+              }}
+            >
+              {Math.round(pctMes * 100)}%
+            </span>
           </div>
-        </div>
+        </Card>
 
         {/* Próximos compromisos */}
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: "14px 16px", border: `0.5px solid ${C.border}`,
-        }}>
-          <div style={{
-            fontSize: 11, color: C.tm, marginBottom: 10,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>Próximos compromisos</div>
+        <Card C={C}>
+          <Eyebrow C={C}>Próximos compromisos</Eyebrow>
           {proxComp.length === 0 ? (
-            <div style={{ fontSize: 12, color: C.td, fontStyle: "italic" }}>Sin compromisos próximos</div>
+            <div style={{ fontSize: S.sm, color: C.td, fontStyle: "italic" }}>
+              Sin compromisos próximos
+            </div>
           ) : proxComp.map((c, i) => {
             const d = dd(hoy, c.fecha);
             const ok = c.falta === 0;
             return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "7px 0",
-                borderTop: i > 0 ? `0.5px solid ${C.border}` : "none",
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: ok ? C.green : C.amber, flexShrink: 0,
-                }}/>
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", gap: SP.md,
+                  padding: `${SP.sm}px 0`,
+                  borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <div
+                  style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: ok ? C.green : C.amber, flexShrink: 0,
+                  }}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 13, color: C.text,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{c.concepto}</div>
-                  <div style={{ fontSize: 11, color: ok ? C.td : C.amberT }}>
+                  <div
+                    style={{
+                      fontSize: S.base, color: C.text, fontWeight: W.m,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {c.concepto}
+                  </div>
+                  <div style={{ fontSize: S.xs, color: ok ? C.td : C.amberT, fontWeight: W.m }}>
                     {d === 0 ? "hoy" : d === 1 ? "mañana" : `en ${d}d`}
                     {!ok && ` · falta ${fS(c.falta)}`}
                   </div>
                 </div>
-                <div style={{
-                  fontSize: 13, fontWeight: 500,
-                  fontFamily: "monospace",
-                  color: ok ? C.green : C.text,
-                }}>{fS(c.monto)}</div>
+                <div
+                  style={{
+                    ...bigNumber(C, ok ? C.green : C.text),
+                    fontSize: S.base, fontWeight: W.sb,
+                  }}
+                >
+                  {fS(c.monto)}
+                </div>
               </div>
             );
           })}
-        </div>
+        </Card>
 
         {/* Saldos por banco */}
         {Object.keys(ultimo).length > 0 && (
-          <div
-            onClick={() => onGoTab && onGoTab(1)}
-            style={{
-              background: C.surface, borderRadius: 10,
-              padding: "14px 16px", border: `0.5px solid ${C.border}`,
-            }}>
-            <div style={{
-              fontSize: 11, color: C.tm, marginBottom: 10,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>Saldos por banco</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <Card C={C} onClick={() => onGoTab && onGoTab(1)}>
+            <Eyebrow C={C}>Saldos por banco</Eyebrow>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.sm }}>
               {Object.entries(ultimo).map(([b, s]) => {
                 const ayerBanco = ultimoAyer[b];
                 const diff = ayerBanco != null ? s - ayerBanco : null;
                 return (
-                  <div key={b} style={{
-                    background: C.surfaceAlt, borderRadius: 8,
-                    padding: "10px 12px",
-                  }}>
-                    <div style={{ fontSize: 10, color: C.tm, marginBottom: 2 }}>{b}</div>
-                    <div style={{
-                      fontSize: 15, fontWeight: 600, color: C.text,
-                      fontFamily: "monospace",
-                    }}>{fS(s)}</div>
+                  <div
+                    key={b}
+                    style={{
+                      background: C.surfaceAlt,
+                      borderRadius: R.md,
+                      padding: `${SP.sm}px ${SP.md}px`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: S.xxs, color: C.tm, marginBottom: 2,
+                        textTransform: "uppercase", letterSpacing: "0.4px", fontWeight: W.sb,
+                      }}
+                    >
+                      {b}
+                    </div>
+                    <div style={{ ...bigNumber(C, C.text), fontSize: S.md }}>{fS(s)}</div>
                     {diff !== null && diff !== 0 && (
-                      <div style={{
-                        fontSize: 10,
-                        color: diff > 0 ? C.green : C.red,
-                      }}>{diff > 0 ? "+" : ""}{fS(diff)}</div>
+                      <div
+                        style={{
+                          fontSize: S.xxs, fontWeight: W.sb,
+                          color: diff > 0 ? C.green : C.red,
+                        }}
+                      >
+                        {diff > 0 ? "+" : ""}{fS(diff)}
+                      </div>
                     )}
                   </div>
                 );
               })}
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Próximos DAPs a vencer (secundario) */}
+        {/* Próximos DAPs */}
         {proxDAP.length > 0 && (
-          <div
-            onClick={() => onGoTab && onGoTab(5)}
-            style={{
-              background: C.surface, borderRadius: 10,
-              padding: "14px 16px", border: `0.5px solid ${C.border}`,
-            }}>
-            <div style={{
-              fontSize: 11, color: C.tm, marginBottom: 10,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>DAPs próximos a vencer</div>
+          <Card C={C} onClick={() => onGoTab && onGoTab(5)}>
+            <Eyebrow C={C}>DAPs próximos a vencer</Eyebrow>
             {proxDAP.slice(0, 3).map((d, i) => {
               const dias = dd(hoy, d.vencimiento);
               const tc = colorTipo(clas(d.tipo), C);
               return (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "7px 0",
-                  borderTop: i > 0 ? `0.5px solid ${C.border}` : "none",
-                }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: "50%",
-                    background: tc.color, flexShrink: 0,
-                  }}/>
+                <div
+                  key={i}
+                  style={{
+                    display: "flex", alignItems: "center", gap: SP.md,
+                    padding: `${SP.sm}px 0`,
+                    borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: tc.color, flexShrink: 0,
+                    }}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 13, color: C.text,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>{d.comentario || `DAP ${d.banco}`}</div>
-                    <div style={{ fontSize: 11, color: C.td }}>
+                    <div
+                      style={{
+                        fontSize: S.base, color: C.text, fontWeight: W.m,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}
+                    >
+                      {d.comentario || `DAP ${d.banco}`}
+                    </div>
+                    <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
                       vence {fd(d.vencimiento)} · {dias === 1 ? "mañana" : `en ${dias}d`}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{
-                      fontSize: 13, fontWeight: 500,
-                      color: C.text, fontFamily: "monospace",
-                    }}>{fS(d.montoInicial)}</div>
-                    <div style={{ fontSize: 10, color: C.green }}>+{fS(d.ganancia)}</div>
+                    <div style={{ ...bigNumber(C, C.text), fontSize: S.base }}>
+                      {fS(d.montoInicial)}
+                    </div>
+                    <div style={{ fontSize: S.xxs, color: C.green, fontWeight: W.sb }}>
+                      +{fS(d.ganancia)}
+                    </div>
                   </div>
                 </div>
               );
             })}
-          </div>
+          </Card>
         )}
 
-        <div style={{ height: 20 }}/>
+        <div style={{ height: SP.xl }} />
       </div>
     );
   }
 
   // ─── LAYOUT DESKTOP ───────────────────────────────────────────────────────
   return (
-    <div>
-      {/* Banner */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        marginBottom: alertas.length > 0 ? 8 : 14,
-        padding: "8px 12px", borderRadius: 8,
-        background: noData ? C.amberD : semCubierta ? C.greenD : C.amberD,
-        border: `0.5px solid ${noData ? C.amber + "44" : semCubierta ? C.green + "44" : C.amber + "44"}`,
-      }}>
-        <span style={{ fontSize: 14 }}>{noData ? "○" : semCubierta ? "●" : "◐"}</span>
-        <span style={{
-          fontSize: 13, fontWeight: 500,
-          color: noData ? C.amberT : semCubierta ? C.greenT : C.amberT,
-        }}>
-          {noData ? "Sin movimientos bancarios hoy — ingresa los saldos en Google Sheets"
-           : semCubierta ? "Semana cubierta — compromisos al día"
-           : `Faltan ${f(faltaSem)} para cubrir la semana`}
-        </span>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: SP.lg }}>
+      <StatusBanner />
 
       {/* Alertas top 3 */}
       {alertas.length > 0 && (
-        <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: SP.xs }}>
           {alertas.slice(0, 3).map((a, i) => {
             const col = colorAlerta(a.tipo);
             return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 12px", borderRadius: 8,
-                background: col.bg, border: `0.5px solid ${col.border}`,
-              }}>
-                <span style={{ fontSize: 13 }}>{a.icono}</span>
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", gap: SP.md,
+                  padding: `${SP.sm}px ${SP.md}px`,
+                  borderRadius: R.md,
+                  background: col.bg,
+                  border: `1px solid ${col.border}`,
+                }}
+              >
+                <span style={{ fontSize: S.md }}>{a.icono}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    fontSize: 12, fontWeight: 600,
-                    color: col.text, marginRight: 8,
-                  }}>{a.titulo.toUpperCase()}</span>
-                  <span style={{ fontSize: 12, color: C.tm }}>{a.mensaje}</span>
+                  <span
+                    style={{
+                      fontSize: S.sm, fontWeight: W.b,
+                      color: col.text,
+                      marginRight: SP.sm,
+                      textTransform: "uppercase", letterSpacing: "0.4px",
+                    }}
+                  >
+                    {a.titulo}
+                  </span>
+                  <span style={{ fontSize: S.sm, color: C.tm, fontWeight: W.m }}>{a.mensaje}</span>
                 </div>
               </div>
             );
           })}
           {alertas.length > 3 && (
-            <div style={{ fontSize: 11, color: C.td, paddingLeft: 12 }}>
+            <div style={{ fontSize: S.xs, color: C.td, paddingLeft: SP.md, fontWeight: W.m }}>
               +{alertas.length - 3} alertas más — ver pestaña Alertas
             </div>
           )}
@@ -457,84 +486,98 @@ export default function TabResumen({
       )}
 
       {/* Métricas principales */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: "18px 20px", border: `0.5px solid ${C.border}`,
-          flex: 2, minWidth: 280,
-        }}>
-          <div style={{
-            fontSize: 11, color: C.tm, marginBottom: 6,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>Saldo cuentas hoy</div>
-          <div style={{
-            fontSize: 30, fontWeight: 600,
-            fontFamily: "monospace", letterSpacing: "-0.5px",
-            color: saldoAct > 0 ? C.text : C.td, lineHeight: 1.1,
-          }}>{saldoAct > 0 ? f(saldoAct) : "Sin datos"}</div>
+      <div style={{ display: "flex", gap: SP.md, flexWrap: "wrap" }}>
+        <div
+          style={{
+            background: C.surface,
+            borderRadius: R.lg,
+            padding: `${SP.xl}px ${SP.xl2}px`,
+            border: `1px solid ${C.border}`,
+            flex: 2,
+            minWidth: 300,
+          }}
+        >
+          <Eyebrow C={C}>Saldo cuentas hoy</Eyebrow>
+          <div style={{ ...bigNumber(C, saldoAct > 0 ? C.text : C.td), fontSize: S.xl4, letterSpacing: "-1px" }}>
+            {saldoAct > 0 ? f(saldoAct) : "Sin datos"}
+          </div>
           {deltaHoyAyer !== null ? (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-              <span style={{
-                fontSize: 12, fontWeight: 500,
-                color: deltaHoyAyer >= 0 ? C.green : C.red,
-              }}>{deltaHoyAyer >= 0 ? "+" : ""}{fS(deltaHoyAyer)}</span>
-              <span style={{ fontSize: 11, color: C.td }}>vs {fd(fechaAyer)}</span>
+            <div style={{ display: "flex", gap: SP.sm, alignItems: "center", marginTop: SP.sm }}>
+              <span
+                style={{
+                  fontSize: S.sm, fontWeight: W.sb,
+                  color: deltaHoyAyer >= 0 ? C.green : C.red,
+                }}
+              >
+                {deltaHoyAyer >= 0 ? "+" : ""}{fS(deltaHoyAyer)}
+              </span>
+              <span style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>vs {fd(fechaAyer)}</span>
             </div>
           ) : totalIni > 0 && (
-            <div style={{ fontSize: 11, color: C.td, marginTop: 6 }}>Inicial: {f(totalIni)}</div>
+            <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.sm, fontWeight: W.m }}>
+              Inicial: {f(totalIni)}
+            </div>
           )}
         </div>
 
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: "14px 16px", border: `0.5px solid ${C.border}`,
-          flex: 1, minWidth: 160,
-        }}>
-          <div style={{
-            fontSize: 11, color: C.tm, marginBottom: 4,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>En DAP vigentes</div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: C.amber, lineHeight: 1.2 }}>
-            {f(totalDAP)}
-          </div>
-          <div style={{ fontSize: 11, color: C.td, marginTop: 3 }}>
+        <div
+          style={{
+            background: C.surface,
+            borderRadius: R.lg,
+            padding: `${SP.lg}px ${SP.lg}px`,
+            border: `1px solid ${C.border}`,
+            flex: 1,
+            minWidth: 180,
+          }}
+        >
+          <Eyebrow C={C}>En DAP vigentes</Eyebrow>
+          <div style={{ ...bigNumber(C, C.amber), fontSize: S.xl2 }}>{f(totalDAP)}</div>
+          <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
             {trab.length} trabajo · {inv.length} inv · {cred.length} cred
           </div>
         </div>
 
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: "14px 16px", border: `0.5px solid ${C.border}`,
-          flex: 1, minWidth: 160,
-        }}>
-          <div style={{
-            fontSize: 11, color: C.tm, marginBottom: 4,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>Fondos mutuos</div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: C.purple, lineHeight: 1.2 }}>
+        <div
+          style={{
+            background: C.surface,
+            borderRadius: R.lg,
+            padding: `${SP.lg}px ${SP.lg}px`,
+            border: `1px solid ${C.border}`,
+            flex: 1,
+            minWidth: 180,
+          }}
+        >
+          <Eyebrow C={C}>Fondos mutuos</Eyebrow>
+          <div style={{ ...bigNumber(C, C.purple), fontSize: S.xl2 }}>
             {totalFFMMAct > 0 ? f(totalFFMMAct) : f(totalFFMMInv)}
           </div>
           {totalGanFFMM > 0 && (
-            <div style={{ fontSize: 11, color: C.green, marginTop: 3 }}>
+            <div style={{ fontSize: S.xs, color: C.green, marginTop: SP.xs, fontWeight: W.sb }}>
               +{fS(totalGanFFMM)} rentabilidad
             </div>
           )}
         </div>
 
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: "14px 16px", border: `0.5px solid ${C.border}`,
-          flex: 1, minWidth: 160,
-        }}>
-          <div style={{
-            fontSize: 11, color: C.tm, marginBottom: 4,
-            textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>{mesLabelAct} cubierto</div>
-          <div style={{
-            fontSize: 22, fontWeight: 600, lineHeight: 1.2,
-            color: pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amberT : C.red,
-          }}>{Math.round(pctMes * 100)}%</div>
-          <div style={{ fontSize: 11, color: C.td, marginTop: 3 }}>
+        <div
+          style={{
+            background: C.surface,
+            borderRadius: R.lg,
+            padding: `${SP.lg}px ${SP.lg}px`,
+            border: `1px solid ${C.border}`,
+            flex: 1,
+            minWidth: 180,
+          }}
+        >
+          <Eyebrow C={C}>{mesLabelAct} cubierto</Eyebrow>
+          <div
+            style={{
+              ...bigNumber(C, pctMes >= 0.9 ? C.green : pctMes >= 0.5 ? C.amberT : C.red),
+              fontSize: S.xl2,
+            }}
+          >
+            {Math.round(pctMes * 100)}%
+          </div>
+          <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
             {fS(guarMes)} de {fS(compMes)}
           </div>
         </div>
@@ -542,182 +585,180 @@ export default function TabResumen({
 
       {/* Leasing + Crédito */}
       {leasingDetalle.length > 0 && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-          <div style={{
-            background: C.surface, borderRadius: 10,
-            padding: "14px 16px", border: `0.5px solid ${C.border}`,
-            flex: 2, minWidth: 260,
-          }}>
-            <div style={{
-              fontSize: 11, color: C.tm, marginBottom: 10,
-              textTransform: "uppercase", letterSpacing: "0.5px",
-            }}>
+        <div style={{ display: "flex", gap: SP.md, flexWrap: "wrap" }}>
+          <Card C={C} style={{ flex: 2, minWidth: 280 }}>
+            <Eyebrow C={C}>
               Leasing · {leasingDetalle.length} contratos · {totalDeudaLeasingUF.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2})} UF
-            </div>
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            </Eyebrow>
+            <div style={{ display: "flex", gap: SP.lg, alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: 11, color: C.td, marginBottom: 2 }}>Cuota mensual c/IVA</div>
-                <div style={{
-                  fontSize: 18, fontWeight: 700, color: C.amber,
-                  fontFamily: "monospace",
-                }}>{f(cuotaTotalLeasing)}</div>
+                <div style={{ fontSize: S.xs, color: C.td, marginBottom: 2, fontWeight: W.m }}>
+                  Cuota mensual c/IVA
+                </div>
+                <div style={{ ...bigNumber(C, C.amber), fontSize: S.xl }}>{f(cuotaTotalLeasing)}</div>
               </div>
-              <div style={{ borderLeft: `0.5px solid ${C.border}`, paddingLeft: 16 }}>
-                <div style={{ fontSize: 11, color: C.td, marginBottom: 2 }}>Deuda s/IVA</div>
-                <div style={{
-                  fontSize: 18, fontWeight: 600, color: C.teal,
-                  fontFamily: "monospace",
-                }}>{f(deudaLeasingSIVACLP)}</div>
+              <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: SP.lg }}>
+                <div style={{ fontSize: S.xs, color: C.td, marginBottom: 2, fontWeight: W.m }}>
+                  Deuda s/IVA
+                </div>
+                <div style={{ ...bigNumber(C, C.teal), fontSize: S.xl }}>{f(deudaLeasingSIVACLP)}</div>
               </div>
             </div>
-          </div>
+          </Card>
           {saldoInsoluto > 0 && (
-            <div style={{
-              background: C.surface, borderRadius: 10,
-              padding: "14px 16px", border: `0.5px solid ${C.border}`,
-              flex: 1, minWidth: 180,
-            }}>
-              <div style={{
-                fontSize: 11, color: C.tm, marginBottom: 6,
-                textTransform: "uppercase", letterSpacing: "0.5px",
-              }}>Crédito comercial</div>
-              <div style={{
-                fontSize: 20, fontWeight: 700, color: C.red,
-                fontFamily: "monospace",
-              }}>{f(saldoInsoluto)}</div>
-              <div style={{ fontSize: 11, color: C.td, marginTop: 4 }}>
+            <Card C={C} style={{ flex: 1, minWidth: 200 }}>
+              <Eyebrow C={C}>Crédito comercial</Eyebrow>
+              <div style={{ ...bigNumber(C, C.red), fontSize: S.xl2 }}>{f(saldoInsoluto)}</div>
+              <div style={{ fontSize: S.xs, color: C.td, marginTop: SP.xs, fontWeight: W.m }}>
                 {creditoPendiente.length} cuotas pendientes
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
 
-      {/* Indicadores económicos (desktop) */}
-      <div style={{ marginBottom: 12 }}>
-        <IndicadoresCard C={C}/>
-      </div>
+      <IndicadoresCard C={C} />
 
       {/* Gráficos */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-        <GraficoCobertura C={C} cal={cal} hoy={hoy}/>
-        <GraficoDonaDap C={C} dap={dap} clas={clas} fS={fS}/>
+      <div style={{ display: "flex", gap: SP.md, flexWrap: "wrap" }}>
+        <GraficoCobertura C={C} cal={cal} hoy={hoy} />
+        <GraficoDonaDap C={C} dap={dap} clas={clas} fS={fS} />
       </div>
 
       {/* Próximos compromisos + DAPs */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: 16, border: `0.5px solid ${C.border}`,
-        }}>
-          <div style={{
-            fontSize: 12, color: C.tm, marginBottom: 10,
-            textTransform: "uppercase",
-          }}>Próximos compromisos</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.md }}>
+        <Card C={C}>
+          <Eyebrow C={C}>Próximos compromisos</Eyebrow>
           {proxComp.length === 0 ? (
-            <div style={{ fontSize: 12, color: C.td, fontStyle: "italic" }}>Sin compromisos próximos</div>
+            <div style={{ fontSize: S.sm, color: C.td, fontStyle: "italic" }}>
+              Sin compromisos próximos
+            </div>
           ) : proxComp.map((c, i) => {
             const d = dd(hoy, c.fecha);
             const ok = c.falta === 0;
             return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "7px 0",
-                borderBottom: i < proxComp.length - 1 ? `0.5px solid ${C.border}` : "none",
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: ok ? C.green : C.amber, flexShrink: 0,
-                }}/>
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", gap: SP.sm,
+                  padding: `${SP.sm}px 0`,
+                  borderBottom: i < proxComp.length - 1 ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <div
+                  style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: ok ? C.green : C.amber, flexShrink: 0,
+                  }}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 13, color: C.text,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{c.concepto}</div>
-                  <div style={{ fontSize: 11, color: C.td }}>
+                  <div
+                    style={{
+                      fontSize: S.base, color: C.text, fontWeight: W.m,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {c.concepto}
+                  </div>
+                  <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
                     {fdf(c.fecha)} · {d === 0 ? "hoy" : d === 1 ? "mañana" : `en ${d}d`}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{
-                    fontSize: 13, fontWeight: 500,
-                    color: ok ? C.green : C.text,
-                  }}>{fS(c.monto)}</div>
-                  {!ok && <div style={{ fontSize: 10, color: C.red }}>Falta {fS(c.falta)}</div>}
+                  <div style={{ ...bigNumber(C, ok ? C.green : C.text), fontSize: S.base }}>
+                    {fS(c.monto)}
+                  </div>
+                  {!ok && (
+                    <div style={{ fontSize: S.xxs, color: C.red, fontWeight: W.sb }}>
+                      Falta {fS(c.falta)}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
-        </div>
+        </Card>
 
-        <div style={{
-          background: C.surface, borderRadius: 10,
-          padding: 16, border: `0.5px solid ${C.border}`,
-        }}>
-          <div style={{
-            fontSize: 12, color: C.tm, marginBottom: 10,
-            textTransform: "uppercase",
-          }}>DAPs próximos a vencer</div>
+        <Card C={C}>
+          <Eyebrow C={C}>DAPs próximos a vencer</Eyebrow>
           {proxDAP.length === 0 ? (
-            <div style={{ fontSize: 12, color: C.td, fontStyle: "italic" }}>Sin DAPs por vencer</div>
+            <div style={{ fontSize: S.sm, color: C.td, fontStyle: "italic" }}>
+              Sin DAPs por vencer
+            </div>
           ) : proxDAP.map((d, i) => {
             const dias = dd(hoy, d.vencimiento);
             const tc = colorTipo(clas(d.tipo), C);
             return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "7px 0",
-                borderBottom: i < proxDAP.length - 1 ? `0.5px solid ${C.border}` : "none",
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: tc.color, flexShrink: 0,
-                }}/>
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", gap: SP.sm,
+                  padding: `${SP.sm}px 0`,
+                  borderBottom: i < proxDAP.length - 1 ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <div
+                  style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: tc.color, flexShrink: 0,
+                  }}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 13, color: C.text,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{d.comentario || `DAP ${d.banco}`}</div>
-                  <div style={{ fontSize: 11, color: C.td }}>
+                  <div
+                    style={{
+                      fontSize: S.base, color: C.text, fontWeight: W.m,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {d.comentario || `DAP ${d.banco}`}
+                  </div>
+                  <div style={{ fontSize: S.xs, color: C.td, fontWeight: W.m }}>
                     Vence {fdf(d.vencimiento)} · {dias === 1 ? "mañana" : `en ${dias}d`}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{
-                    fontSize: 13, fontWeight: 500, color: C.text,
-                  }}>{fS(d.montoInicial)}</div>
-                  <div style={{ fontSize: 10, color: C.green }}>+{fS(d.ganancia)}</div>
+                  <div style={{ ...bigNumber(C, C.text), fontSize: S.base }}>
+                    {fS(d.montoInicial)}
+                  </div>
+                  <div style={{ fontSize: S.xxs, color: C.green, fontWeight: W.sb }}>
+                    +{fS(d.ganancia)}
+                  </div>
                 </div>
               </div>
             );
           })}
-        </div>
+        </Card>
       </div>
 
-      {/* Saldos por banco desktop */}
+      {/* Saldos por banco */}
       {Object.keys(ultimo).length > 0 && (
-        <div style={{
-          marginTop: 12, background: C.surface, borderRadius: 10,
-          padding: 16, border: `0.5px solid ${C.border}`,
-        }}>
-          <div style={{
-            fontSize: 12, color: C.tm, marginBottom: 10,
-            textTransform: "uppercase",
-          }}>Saldos por banco hoy</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Card C={C}>
+          <Eyebrow C={C}>Saldos por banco hoy</Eyebrow>
+          <div style={{ display: "flex", gap: SP.md, flexWrap: "wrap" }}>
             {Object.entries(ultimo).map(([b, s]) => {
               const ayerBanco = ultimoAyer[b];
               const diff = ayerBanco != null ? s - ayerBanco : null;
               return (
-                <div key={b} style={{
-                  flex: 1, minWidth: 120,
-                  padding: "10px 12px", borderRadius: 8,
-                  background: C.surfaceAlt,
-                }}>
-                  <div style={{ fontSize: 11, color: C.tm, marginBottom: 2 }}>{b}</div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>{fS(s)}</div>
+                <div
+                  key={b}
+                  style={{
+                    flex: 1, minWidth: 140,
+                    padding: `${SP.sm}px ${SP.md}px`,
+                    borderRadius: R.md,
+                    background: C.surfaceAlt,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: S.xxs, color: C.tm, marginBottom: 2,
+                      textTransform: "uppercase", letterSpacing: "0.4px", fontWeight: W.sb,
+                    }}
+                  >
+                    {b}
+                  </div>
+                  <div style={{ ...bigNumber(C, C.text), fontSize: S.lg }}>{fS(s)}</div>
                   {diff !== null && diff !== 0 && (
-                    <div style={{ fontSize: 11, color: diff > 0 ? C.green : C.red }}>
+                    <div style={{ fontSize: S.xs, fontWeight: W.sb, color: diff > 0 ? C.green : C.red }}>
                       {diff > 0 ? "+" : ""}{fS(diff)}
                     </div>
                   )}
@@ -725,7 +766,7 @@ export default function TabResumen({
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

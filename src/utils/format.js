@@ -3,7 +3,6 @@
 export const f = (n) => {
   if (n == null) return "—";
   const a = Math.abs(n);
-  if (a >= 1e9) return `$${(n/1e9).toLocaleString("es-CL",{minimumFractionDigits:1,maximumFractionDigits:1})} MM`;
   if (a >= 1e6) return `$${Math.round(n/1e6).toLocaleString("es-CL")} M`;
   return `$${Math.round(n).toLocaleString("es-CL")}`;
 };
@@ -11,8 +10,7 @@ export const f = (n) => {
 export const fS = (n) => {
   if (n == null) return "—";
   const a = Math.abs(n);
-  if (a >= 1e9) return `${(n/1e9).toFixed(1)}MM`;
-  if (a >= 1e6) return `${Math.round(n/1e6)}M`;
+  if (a >= 1e6) return `${Math.round(n/1e6).toLocaleString("es-CL")}M`;
   return Math.round(n).toLocaleString("es-CL");
 };
 
