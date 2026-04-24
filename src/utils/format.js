@@ -60,3 +60,72 @@ export const useIsMobile = (breakpoint = 768) => {
   if (typeof window === 'undefined') return false;
   return window.innerWidth < breakpoint;
 };
+
+// --- Aliases alineados con la skill frontend-design-bello ---
+// Todos los helpers siguen el formato chileno: punto como separador de miles,
+// coma como decimal. No reemplazan a f/fS — los complementan con nombres
+// canónicos para nuevos módulos.
+
+// fmtCLP: entero formateado a la chilena, sin prefijo. Ej: 1234567 -> "1.234.567".
+export const fmtCLP = (n) => {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  return Math.round(Number(n)).toLocaleString("es-CL");
+};
+
+// fmtPeso: monto en pesos con prefijo $, sin decimales. Ej: 1234567 -> "$1.234.567".
+// Nunca abrevia — úsalo en tablas o vistas de detalle.
+export const fmtPeso = (n) => {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  return `$${Math.round(Number(n)).toLocaleString("es-CL")}`;
+};
+
+// fmtMM: monto abreviado a millones con una decimal. Ej: 57_700_000_000 -> "$57.700,0M".
+// Úsalo en KPIs ejecutivos donde importa más el orden de magnitud que la precisión.
+export const fmtMM = (n) => {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  const v = Number(n) / 1_000_000;
+  return `$${v.toLocaleString("es-CL", { maximumFractionDigits: 1 })}M`;
+};
+
+// fmtPct: número con símbolo %. Convención: recibe porcentaje ya en escala 0..100.
+// fmtPct(12.34) -> "12,3%". fmtPct(12.345, 2) -> "12,35%".
+export const fmtPct = (n, decimals = 1) => {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  return `${Number(n).toLocaleString("es-CL", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}%`;
+};
+
+// fmtDelta: delta porcentual con flecha y color semántico.
+// Recibe porcentaje en escala 0..100 (puede ser negativo).
+export const fmtDelta = (n, decimals = 1) => {
+  if (n == null || !Number.isFinite(Number(n))) {
+    return { text: "—", positive: null };
+  }
+  const v = Number(n);
+  const arrow = v >= 0 ? "▲" : "▼";
+  const abs = Math.abs(v).toLocaleString("es-CL", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  return { text: `${arrow} ${abs}%`, positive: v >= 0 };
+};
+
+// parseNumCLP: convierte string chileno ("1.234.567,89") en Number.
+// Tolerante a $ inicial, espacios y signos.
+export const parseNumCLP = (str) => {
+  if (str == null) return 0;
+  if (typeof str === "number") return str;
+  const clean = String(str)
+    .trim()
+    .replace(/^\$\s*/, "")
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const n = parseFloat(clean);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Alias explícito — fmtCLP es equivalente a fS pero con nombre canónico de la skill.
+export { fS as fmtInt };

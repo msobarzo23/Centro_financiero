@@ -4,7 +4,78 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Centro de Mando Financiero — TBello</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"/>
+<meta name="theme-color" content="#1D4ED8"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231D4ED8'/><text x='50' y='68' text-anchor='middle' font-size='54' font-family='Georgia,serif' font-weight='700' fill='white'>TB</text></svg>"/>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11' 1, 'ss01' 1;
+  }
+
+  /* Animación principal de entrada para cards y secciones. */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(14px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @keyframes shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Cards con animación de entrada. Aplicar className="card-anim".
+     Stagger por :nth-child para que carguen en cascada. */
+  .card-anim {
+    animation: fadeInUp 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .stagger > *:nth-child(1)  { animation-delay: 0ms; }
+  .stagger > *:nth-child(2)  { animation-delay: 80ms; }
+  .stagger > *:nth-child(3)  { animation-delay: 160ms; }
+  .stagger > *:nth-child(4)  { animation-delay: 240ms; }
+  .stagger > *:nth-child(5)  { animation-delay: 320ms; }
+  .stagger > *:nth-child(6)  { animation-delay: 400ms; }
+  .stagger > *:nth-child(7)  { animation-delay: 480ms; }
+  .stagger > *:nth-child(8)  { animation-delay: 560ms; }
+  .stagger > *:nth-child(9)  { animation-delay: 640ms; }
+  .stagger > *:nth-child(10) { animation-delay: 720ms; }
+
+  /* Hover lift para cards interactivas. */
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+  }
+
+  /* Scrollbar discreta para contenedores con overflow. */
+  .thin-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+  .thin-scroll::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.35); border-radius: 3px; }
+  .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  /* Ocultar scrollbar horizontal en tabs. */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
 </head>
-<body style="margin:0"><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+<body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
 </html>
