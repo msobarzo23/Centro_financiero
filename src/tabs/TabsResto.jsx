@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import {
-  f, fS, fd, fdf, dd, fUF, clas, colorTipo, colorBanco,
+  f, fS, fmtCLP, fd, fdf, dd, fUF, clas, colorTipo, colorBanco,
   mesLabel, mesLabelLargo,
 } from '../utils/format.js';
 import { S, W, R, SP, FONT_MONO, FONT_TITLE } from '../utils/theme.js';
@@ -798,10 +798,10 @@ export function TabInversiones({ C, dap, hoy }) {
                       {d.tasa ? (d.tasa * 100).toFixed(2) + "%" : "—"}
                     </td>
                     <td style={{ padding: `${SP.sm}px ${SP.md}px`, fontFamily: MONO, color: C.text, fontWeight: W.sb }}>
-                      {fS(d.montoInicial)}
+                      {fmtCLP(d.montoInicial)}
                     </td>
                     <td style={{ padding: `${SP.sm}px ${SP.md}px`, fontFamily: MONO, color: C.green, fontWeight: W.sb }}>
-                      +{fS(d.ganancia)}
+                      +{fmtCLP(d.ganancia)}
                     </td>
                     <td
                       style={{
