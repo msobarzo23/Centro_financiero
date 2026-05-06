@@ -335,14 +335,14 @@ export default function App() {
             src="/logo-bello.svg"
             alt="Transportes Bello"
             style={{
-              height: 40,
+              height: 96,
               width: 'auto',
               display: 'block',
               flexShrink: 0,
               filter: tema === 'dark' ? 'brightness(0) invert(1)' : 'none',
             }}
           />
-          <div style={{ height: 30, width: 1, background: C.border, flexShrink: 0 }} />
+          <div style={{ height: 64, width: 1, background: C.border, flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div
               style={{
