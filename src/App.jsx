@@ -331,26 +331,18 @@ export default function App() {
         }}
       >
         <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: SP.md }}>
-          <div
+          <img
+            src="/logo-bello.svg"
+            alt="Transportes Bello"
             style={{
-              width: 38,
-              height: 38,
-              borderRadius: R.md,
-              background: `linear-gradient(135deg, ${C.accent}, ${C.teal})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: S.md,
-              fontWeight: W.b,
-              letterSpacing: '-0.5px',
+              height: 40,
+              width: 'auto',
+              display: 'block',
               flexShrink: 0,
-              fontFamily: FONT_TITLE,
-              boxShadow: '0 2px 6px rgba(29,78,216,0.25)',
+              filter: tema === 'dark' ? 'brightness(0) invert(1)' : 'none',
             }}
-          >
-            TB
-          </div>
+          />
+          <div style={{ height: 30, width: 1, background: C.border, flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div
               style={{
