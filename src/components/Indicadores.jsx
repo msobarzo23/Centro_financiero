@@ -75,11 +75,6 @@ export function IndicadoresCard({ C }) {
     { label: 'USD', valor: fmtCLP(data.dolar), color: C.teal },
     { label: 'UTM', valor: fmtCLP(data.utm), color: C.amber },
     { label: 'TPM', valor: data.tpm != null ? `${data.tpm}%` : '—', color: C.purple },
-    {
-      label: 'IPC mes',
-      valor: data.ipc != null ? `${data.ipc > 0 ? '+' : ''}${data.ipc}%` : '—',
-      color: data.ipc > 0 ? C.red : C.green,
-    },
   ];
 
   return (
