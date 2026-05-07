@@ -85,8 +85,10 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
     ? ((totalMesActual - totalMesAnioPasado) / totalMesAnioPasado) * 100
     : null;
 
+  // Conteo de facturas reales (excluye notas de crédito) para que el ticket
+  // promedio refleje sólo documentos de venta y no se distorsione con devoluciones.
   const facturasYTD = useMemo(
-    () => rows.filter((r) => r.fecha.startsWith(anioActual) && r.fecha.slice(5) <= mmddCorte).length,
+    () => rows.filter((r) => r.fecha.startsWith(anioActual) && r.fecha.slice(5) <= mmddCorte && r.neto > 0).length,
     [rows, anioActual, mmddCorte],
   );
   const ticketPromedio = facturasYTD > 0 ? totalActualYTD / facturasYTD : 0;

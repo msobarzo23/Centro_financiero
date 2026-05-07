@@ -96,7 +96,9 @@ function parseVentas(text) {
     .filter((r) => {
       const fecha = parseDate(r['FECHA'] || r['Fecha'] || '');
       const neto = parseNum(r['NETO'] || r['Neto'] || '');
-      return fecha && neto != null && neto > 0;
+      // Incluye notas de crédito (NETO < 0): restan ventas y deben sumar al
+      // total. Descartar sólo filas sin fecha o sin monto.
+      return fecha && neto != null && neto !== 0;
     })
     .map((r) => {
       const fecha = parseDate(r['FECHA'] || r['Fecha'] || '');
