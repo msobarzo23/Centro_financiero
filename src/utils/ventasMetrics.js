@@ -3,6 +3,12 @@
 // No mutan input y no dependen de React ni de Recharts.
 
 import { nombreCliente, INACTIVITY_THRESHOLD_MONTHS } from '../config/ventasConfig.js';
+import {
+  getUpliftPonderado,
+  MEPCO_ADJUSTMENT_MONTH,
+  MEPCO_ADJUSTMENT_YEAR,
+  MEPCO_TRIP_START_MONTH,
+} from '../data/mepcoReajustes.js';
 
 const MESES_ABREV = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -103,36 +109,125 @@ function contarDiasHabiles(desde, hasta) {
   return n;
 }
 
-// Proyección estacional: usa la distribución porcentual del año anterior
-// para escalar los meses aún no cerrados del año en curso.
-// Mejor que la lineal cuando hay estacionalidad fuerte.
-// `mmddCorte` define qué parte del mes actual está cerrada.
-export function proyectarEstacional(rows, anioActual, anioAnterior, mmddCorte) {
+// Construye el uplift MEPCO por mes [1..12] dado el mix de clientes del año
+// previo. Para meses pre-vigencia o años distintos a 2026/2027+, devuelve 0.
+// Espejo de buildUpliftPorMes en dashboard-ventas.
+function buildUpliftPorMes(clientPrevList, currentYear) {
+  const out = {};
+  for (let m = 1; m <= 12; m++) {
+    if (currentYear === MEPCO_ADJUSTMENT_YEAR && m >= MEPCO_TRIP_START_MONTH) {
+      out[m] = getUpliftPonderado(clientPrevList, m);
+    } else if (currentYear > MEPCO_ADJUSTMENT_YEAR) {
+      // Años posteriores: uplift permanente desde la nueva base.
+      out[m] = getUpliftPonderado(clientPrevList, MEPCO_ADJUSTMENT_MONTH);
+    } else {
+      out[m] = 0;
+    }
+  }
+  return out;
+}
+
+// Cuenta días hábiles (lun-vie) transcurridos en un mes hasta `mmdd` (inclusive).
+function diasHabilesEnMesHasta(anio, mes, diaHasta) {
+  let n = 0;
+  for (let d = 1; d <= diaHasta; d++) {
+    const dow = new Date(anio, mes - 1, d).getDay();
+    if (dow !== 0 && dow !== 6) n++;
+  }
+  return n;
+}
+
+function diasHabilesTotalMes(anio, mes) {
+  const ultimo = new Date(anio, mes, 0).getDate();
+  return diasHabilesEnMesHasta(anio, mes, ultimo);
+}
+
+// Proyección estacional alineada con dashboard-ventas y centro-mando.
+// Escala los meses futuros por el ritmo real de los meses cerrados del año
+// actual y aplica uplift MEPCO sobre meses ≥ mayo 2026.
+//
+// Parámetros:
+// - rows: ventas con shape { fecha, neto, rut, ... }
+// - anioActual / anioAnterior: 'YYYY'
+// - mmddCorte: 'MM-DD' del último día con datos
+// - clientPrevList: [{ rut, prev }] del año anterior (opcional, para uplift)
+//
+// Para conservar compatibilidad, si `clientPrevList` viene vacío, el uplift
+// es 0 y el resultado se reduce a un escalado puro del año previo.
+export function proyectarEstacional(rows, anioActual, anioAnterior, mmddCorte, clientPrevList = []) {
   const actAnual = serieMensualAnio(rows, anioActual);
   const antAnual = serieMensualAnio(rows, anioAnterior);
   const antTotal = antAnual.reduce((s, x) => s + x.neto, 0);
-  if (antTotal <= 0) return 0;
+  if (antTotal <= 0) return actAnual.reduce((s, x) => s + x.neto, 0);
 
   const mesHoy = Number(mmddCorte.slice(0, 2));
   const diaHoy = Number(mmddCorte.slice(3));
-  let proyectado = 0;
-  for (let m = 1; m <= 12; m++) {
-    if (m < mesHoy) {
-      proyectado += actAnual[m - 1].neto;
-    } else if (m === mesHoy) {
-      // Completa el mes actual con el ritmo del mes pasado equivalente.
-      const diasEnMes = new Date(anioActual, m, 0).getDate();
-      const frac = Math.min(1, diaHoy / diasEnMes);
-      const esperadoMes = antAnual[m - 1].neto;
-      const actualMes = actAnual[m - 1].neto;
-      const restante = esperadoMes * (1 - frac);
-      proyectado += Math.max(actualMes, actualMes + restante);
-    } else {
-      // Meses futuros: usar el mismo mes del año pasado como proxy.
-      proyectado += antAnual[m - 1].neto;
+  const anioActualNum = Number(anioActual);
+
+  // Meses ya cerrados (con dato real completo) y mes en curso (parcial).
+  const closedMonths = [];
+  for (let m = 1; m < mesHoy; m++) closedMonths.push(m);
+  const openMonth = mesHoy;
+
+  const ytdClosed = closedMonths.reduce((s, m) => s + actAnual[m - 1].neto, 0);
+  const ytdOpen = actAnual[openMonth - 1]?.neto || 0;
+
+  const upliftPorMes = buildUpliftPorMes(clientPrevList, anioActualNum);
+
+  // Pesos del año pasado por mes (fracción del total).
+  const weights = antAnual.map((m) => m.neto / antTotal);
+  const weightsClosed = closedMonths.reduce((s, m) => s + weights[m - 1], 0);
+
+  if (closedMonths.length === 0 || weightsClosed <= 0) {
+    // Sin meses cerrados (estamos en enero o sin historia previa): proyección
+    // por prorrateo del mes en curso.
+    const totalDh = diasHabilesTotalMes(anioActualNum, openMonth);
+    const elapsedDh = diasHabilesEnMesHasta(anioActualNum, openMonth, diaHoy);
+    const openProj = elapsedDh > 0 ? ytdOpen * (totalDh / elapsedDh) : ytdOpen;
+    let proy = openProj;
+    for (let m = 1; m <= 12; m++) {
+      if (m === openMonth) continue;
+      proy += antAnual[m - 1].neto * (1 + (upliftPorMes[m] || 0));
     }
+    return proy;
   }
-  return proyectado;
+
+  // annualFromClosed = lo que sería el año completo si los meses cerrados
+  // mantienen su ritmo respecto a los del año pasado.
+  const annualFromClosed = ytdClosed / weightsClosed;
+
+  // Mes en curso: tomamos el máximo entre prorrateo por días hábiles y el
+  // valor esperado según el peso del mes en el año pasado (con uplift).
+  const totalDh = diasHabilesTotalMes(anioActualNum, openMonth);
+  const elapsedDh = diasHabilesEnMesHasta(anioActualNum, openMonth, diaHoy);
+  const openProrata = elapsedDh > 0 ? ytdOpen * (totalDh / elapsedDh) : ytdOpen;
+  const openExpected = annualFromClosed * weights[openMonth - 1] * (1 + (upliftPorMes[openMonth] || 0));
+  const openContribution = Math.max(openProrata, openExpected);
+
+  // Meses futuros: escalados por annualFromClosed y peso, con uplift MEPCO.
+  let futureContribution = 0;
+  for (let m = openMonth + 1; m <= 12; m++) {
+    futureContribution += annualFromClosed * weights[m - 1] * (1 + (upliftPorMes[m] || 0));
+  }
+
+  return ytdClosed + openContribution + futureContribution;
+}
+
+// Construye la lista [{rut, prev}] del año anterior agregando por cliente.
+// Necesaria para que proyectarEstacional pondere el uplift por mix histórico.
+export function buildClientPrevList(rows, anioAnterior) {
+  const map = {};
+  const rutMap = {};
+  const prefix = String(anioAnterior);
+  for (const r of rows) {
+    if (!r.fecha.startsWith(prefix)) continue;
+    const k = nombreCliente(r.razonSocial);
+    map[k] = (map[k] || 0) + (r.neto || 0);
+    if (r.rut && !rutMap[k]) rutMap[k] = r.rut;
+  }
+  return Object.entries(map)
+    .filter(([, v]) => v > 0)
+    .map(([cliente, prev]) => ({ rut: rutMap[cliente] || '', prev }));
 }
 
 // Índice Herfindahl-Hirschman: concentración de cartera.

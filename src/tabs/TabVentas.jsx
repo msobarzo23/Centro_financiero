@@ -41,6 +41,7 @@ import {
   totalPorAnio,
   brechaYTD,
   etiquetaMes,
+  buildClientPrevList,
 } from '../utils/ventasMetrics.js';
 import { META_ANUAL, CLIENT_COLORS, nombreCliente } from '../config/ventasConfig.js';
 
@@ -93,11 +94,18 @@ export default function TabVentas({ C, ventas, isMobile, hoy }) {
   );
   const ticketPromedio = facturasYTD > 0 ? totalActualYTD / facturasYTD : 0;
 
+  // Lista de clientes del año pasado con su RUT, para ponderar el uplift
+  // MEPCO según el mix histórico al proyectar meses futuros.
+  const clientPrevList = useMemo(
+    () => buildClientPrevList(rows, anioPasado),
+    [rows, anioPasado],
+  );
+
   // Proyecciones: estacional + prorrateada (solo para año en curso).
   const proyEstacional = useMemo(() => {
     if (!esAnioEnCurso) return totalActualYTD;
-    return proyectarEstacional(rows, anioActual, anioPasado, mmddCorte);
-  }, [rows, anioActual, anioPasado, mmddCorte, esAnioEnCurso, totalActualYTD]);
+    return proyectarEstacional(rows, anioActual, anioPasado, mmddCorte, clientPrevList);
+  }, [rows, anioActual, anioPasado, mmddCorte, esAnioEnCurso, totalActualYTD, clientPrevList]);
 
   const proyProrrateada = useMemo(() => {
     if (!esAnioEnCurso) return totalActualYTD;

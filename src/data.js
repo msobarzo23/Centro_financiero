@@ -112,6 +112,7 @@ function parseVentas(text) {
         montoReal,
         afecta,
         razonSocial: (r['RAZON SOCIAL'] || r['Razón Social'] || '').trim(),
+        rut: String(r['RUT'] || r['Rut'] || '').trim(),
         folio: r['FOLIO'] || r['Folio'] || '',
       };
     });
